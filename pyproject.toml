@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+genie_flow_invoker = "genie_flow_invoker"
+
+[project]
+name = "genie_flow_invoker_weaviate"
+authors = [
+    { name = "Willem van Asperen", email = "willem.van.asperen@paconsulting.com"}
+]
+description = "Genie Flow Invoker Weaviate"
+readme = "README.md"
+requires-python = "~=3.11.0"
+classifiers=[
+    'Programming Language :: Python :: 3',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: OS Independent',
+]
+dependencies=[
+    "loguru~=0.7.2",
+    "genie-flow-invoker",
+    "weaviate-client~=4.6.5"
+]
+dynamic = ["version"]
