@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 import weaviate
 from loguru import logger
@@ -22,7 +22,7 @@ class WeaviateClientFactory:
 
     """
 
-    def __init__(self, config: dict[str]):
+    def __init__(self, config: dict[str, Any]):
         """
         Creates a new Weaviate client factory. Configuration should include: `http_host`,
         `http_port`, `http_secure`, `grpc_host`, `grpc_port`, and `grpc_secure`. The values from

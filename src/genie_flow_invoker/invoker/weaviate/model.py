@@ -14,11 +14,19 @@ class WeaviateSimilaritySearchRequest(SimilaritySearchRequest):
         default="cosine",
         description="Weaviate similarity distance metric",
     )
-    collection: Optional[str] = Field(
+    auto_limit: Optional[int] = Field(
+        default=None,
+        description="The number of auto-cut similarity search results groups",
+    )
+    alpha: Optional[float] = Field(
+        default=None,
+        description="The alpha parameter for Weaviate hybrid search",
+    )
+    collection_name: Optional[str] = Field(
         default=None,
         description="The collection name for the similarity search"
     )
-    tenant: Optional[str] = Field(
+    tenant_name: Optional[str] = Field(
         default=None,
         description="The tenant name for the similarity search"
     )

@@ -46,12 +46,12 @@ not exist
 : an optional name for a particular tenant to use within the collection. Fails if the given
 tenant does not exist
 
-`vector_name`
+`named_vector`
 : an optional name of a particular vector to be used. Defaults to `None` which will point to
 the default vector.
 
 `include_vector`
-: whether or not to include the vector with the search results. Defaults to `False`.
+: whether to include the vector with the search results. Defaults to `False`.
 
 `method`
 : Optional similarity method, can be "cosine", "dot", "l2-squared", "hamming" or "manhattan".
@@ -155,10 +155,11 @@ and higher levels mean that the chunk sits lower in the hierarchy.
 `filename`: the name of the original file this chunk is from
 
 Any metadata that is added to the document when it is stored is also added to each and every chunk.
+This is done under the property `document_metadata` as a dictionary.
 
 ### vector or named vectors
-Every object in the Weaviate database will have one or more vectors. If no named vectors are used, this
-would the the single vector, but with named vectors, this would be a dictionary of vectors.
+Every object in the Weaviate database will have one or more vectors. If no named vectors are used, 
+this would be the single vector, but with named vectors, this would be a dictionary of vectors.
 
 ### references
 Every object can contain a reference to it's parent chunk. The property for this parent is called
