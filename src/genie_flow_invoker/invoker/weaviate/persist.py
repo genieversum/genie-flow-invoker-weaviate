@@ -1,12 +1,11 @@
 from collections import defaultdict
 from typing import Optional
 
-from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
+from genie_flow_invoker.doc_proc import ChunkedDocument
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from loguru import logger
 from weaviate.collections import Collection
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
-from weaviate.collections.classes.internal import Object
 
 
 def _compile_properties(params: dict):
@@ -203,7 +202,7 @@ class WeaviatePersistor:
             document: ChunkedDocument,
             collection_name: str,
             tenant_name: Optional[str] = None,
-    ) -> None:
+    ) -> tuple[int, int]:
         """
         Persist a given chunked document into a collection with the given name and potentially
         into a tenant with the given name.
@@ -214,7 +213,8 @@ class WeaviatePersistor:
         :param document: the `ChunkedDocument` to persist
         :param collection_name: the name of the collection to store it into
         :param tenant_name: an Optional name of a tenant to store the document into.
-        :return: None
+        :return: tuple of nr_inserted and nr_replaces, respectively the number of inserted and
+                 replaced chunks
         """
         chunk_index = defaultdict(list)
         for chunk in document.chunks:
@@ -254,6 +254,8 @@ class WeaviatePersistor:
         )
 
         # making sure we add the chunks from top to bottom
+        nr_inserted = 0
+        nr_replaced = 0
         for hierarchy_level, chunks in chunk_index.items():
             logger.debug(
                 "persisting {nr_chunks} chunk(s) at hierarchy level {hierarchy_level}",
@@ -269,26 +271,25 @@ class WeaviatePersistor:
                     "hierarchy_level": chunk.hierarchy_level,
                     "document_metadata": document.metadata,
                 }
-                references = {"parent": chunk.parent_id} if chunk.parent_id else None,
+                references = {"parent": chunk.parent_id} if chunk.parent_id else None
+
                 if not collection.data.exists(chunk.chunk_id):
-                    logger.debug(
-                        "inserting chunk with id {chunk_id}",
-                        chunk_id=chunk.chunk_id,
-                    )
+                    logger.debug("inserting chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
                     collection.data.insert(
                         uuid=chunk.chunk_id,
                         properties=properties,
                         references=references,
                         vector=chunk.embedding,
                     )
+                    nr_inserted += 1
                 else:
-                    logger.debug(
-                        "replacing chunk with id {chunk_id}",
-                        chunk_id=chunk.chunk_id,
-                    )
+                    logger.debug("replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
                     collection.data.replace(
                         uuid=chunk.chunk_id,
                         properties=properties,
                         references=references,
                         vector=chunk.embedding,
                     )
+                    nr_replaced += 1
+
+        return nr_inserted, nr_replaced
