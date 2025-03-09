@@ -8,7 +8,9 @@ from pydantic_core._pydantic_core import ValidationError
 
 from genie_flow_invoker.genie import GenieInvoker
 from genie_flow_invoker.invoker.weaviate.client import WeaviateClientFactory
-from genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest
+from genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest, \
+    WeaviatePersistenceRequest
+from genie_flow_invoker.invoker.weaviate.persist import WeaviatePersistor
 from genie_flow_invoker.invoker.weaviate.search import (
     SimilaritySearcher,
     AbstractSearcher,
@@ -16,14 +18,26 @@ from genie_flow_invoker.invoker.weaviate.search import (
 )
 
 
-class AbstractWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
+class AbstractWeaviateInvoker(GenieInvoker, ABC):
+
+    def __init__(self, client_factory: WeaviateClientFactory):
+        self.client_factory = client_factory
+
+    @classmethod
+    def from_config(cls, config: dict):
+        connection_config = config["connection"]
+        client_factory = WeaviateClientFactory(connection_config)
+        return cls(client_factory)
+
+
+class AbstractWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
 
     def __init__(
         self,
         client_factory: WeaviateClientFactory,
         query_config: dict[str, Any],
     ) -> None:
-        self.client_factory = client_factory
+        super().__init__(client_factory)
         self.query_config = query_config
 
     @classmethod
@@ -33,11 +47,9 @@ class AbstractWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
         should include a key `connection` which contains all keys for setting up the connection.
         Should also include the key `query` for all (default) query parameters.
         """
-        connection_config = config["connection"]
-        client_factory = WeaviateClientFactory(connection_config)
-
+        super_class = super(AbstractWeaviateInvoker).from_config(config)
         query_config = config["query"]
-        return cls(client_factory, query_config)
+        return cls(super_class.client_factory, query_config)
 
 
 class ConfiguredWeaviateSimilaritySearchInvoker(
@@ -163,3 +175,51 @@ class WeaviateSimilaritySearchRequestInvoker(ConfiguredWeaviateSimilaritySearchI
             params=query_params.model_dump().keys(),
         )
         return query_params.model_dump()
+
+
+class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker):
+
+    def __init__(self, client_factory: WeaviateClientFactory, persist_config: dict) -> None:
+        super().__init__(client_factory)
+        self.persist_config = persist_config
+        self.persistor = WeaviatePersistor(self.client_factory, self.persist_config)
+
+    @classmethod
+    def from_config(cls, config: dict):
+        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        persist_config = config["persist"]
+        return cls.__init__(super_class.client_factory, persist_config)
+
+
+class WeaviateCreateCollectionInvoker(AbstractWeaviatePersistorInvoker):
+    """
+    This Invoker creates a new collection with an optional tenant.
+    """
+
+    def invoke(self, content: str) -> str:
+        try:
+            params = json.loads(content)
+        except json.decoder.JSONDecodeError:
+            logger.error("Cannot parse content as params '{content}'", content=content)
+            raise ValueError(f"invalid content '{content}'")
+        collection = self.persistor.get_or_create(params)
+        return json.dumps(collection.config.get())
+
+
+class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviatePersistenceRequest.model_validate_json(content)
+        except ValidationError as e:
+            logger.error(
+                "Cannot parse content as persistence request '{content}'",
+                content=content,
+            )
+            raise ValueError("invalid content '{content}'")
+
+        self.persistor.persist_document(
+            request.document,
+            request.collection_name,
+            request.tenant_name,
+        )

@@ -95,20 +95,6 @@ def _compile_cross_references(params: dict):
     ]
 
 
-def _compile_object(
-        chunk: DocumentChunk,
-        collection_name: str,
-        filename: str,
-        document_metadata: dict,
-) -> Object:
-    return Object(
-        collection=collection_name,
-        uuid=chunk.chunk_id,
-
-        references={"parent": chunk.parent_id},
-        me
-    )
-
 class WeaviatePersistor:
 
     def __init__(self, client_factory: WeaviateClientFactory, persist_params: dict) -> None:
@@ -117,10 +103,19 @@ class WeaviatePersistor:
         self.base_persist_params = dict(
             collection_name=persist_params.get("collection_name", None),
             tenant_name=persist_params.get("tenant_name", None),
-            operation_level=persist_params.get("operation_level", None),
         )
 
-    def create_collection(self, persist_params: dict) -> Collection:
+    def create_collection(self, persist_params: dict, omnipotent: bool = False) -> Collection:
+        """
+        Create a new collection with the given name and the configuration that is compiled from
+        the given persist_params. Raises a ValueError when a collection with that name
+        already exists - unless omnipotent is set to True.
+
+        :param persist_params: the configuration parameters to create the collection with
+        :param omnipotent: a boolean indicating to ignore creating already existing collections.
+                           Defauts to False
+        :return: the newly created collection
+        """
         params = self.base_persist_params.copy()
         params.update(persist_params)
 
@@ -129,6 +124,19 @@ class WeaviatePersistor:
             raise ValueError("No collection name specified")
 
         with self.client_factory as client:
+            if client.collections.exists(collection_name):
+                if not omnipotent:
+                    logger.error(
+                        "Cannot create collection with name '{collection_name}' "
+                        "because it already exists.",
+                        collection_name=collection_name,
+                    )
+                    raise ValueError("Collection {collection_name} already exists")
+                logger.warning(
+                    "Skipping creation of collection '{collection_name}' that already exists.",
+                    collection_name=collection_name,
+                )
+                return
             client.collections.create(
                 name=collection_name,
                 properties=_compile_properties(params),
@@ -136,10 +144,15 @@ class WeaviatePersistor:
                 references=_compile_cross_references(params)
             )
 
-    def create_tenant(self, collection_name: str, tenant_name: str, idempotent: bool = False):
+    def create_tenant(
+            self,
+            collection_name: str,
+            tenant_name: str,
+            idempotent: bool = False,
+    ) -> Collection:
         """
         Create a new tenant for a collection with a given name. If a tenant already exists,
-        with the given tenant name, a KeyError is raised - unless idempotent is set to True
+        with the given tenant name, a ValueError is raised - unless idempotent is set to True
         in which case the creation is silently ignored.
 
         :param collection_name: name of the collection to add to
@@ -154,10 +167,36 @@ class WeaviatePersistor:
             collection = client.collections.get(collection_name)
             if collection.tenants.exists(tenant_name):
                 if idempotent:
+                    logger.warning(
+                        "Skipping creation of tenant '{tenant_name}' that already exists.",
+                        tenant_name=tenant_name,
+                    )
                     return
-                raise KeyError(f"Tenant {tenant_name} already exists")
+                raise ValueError(f"Tenant {tenant_name} already exists")
 
-            collection.tenants.create([tenant_name])
+        collection.tenants.create([tenant_name])
+        return collection.collections.get(collection_name).with_tennant(tenant_name)
+
+    def get_or_create(self, params: dict) -> Collection:
+        collection_name: Optional[str] = params.get("collection_name", None)
+        if collection_name is None:
+            raise ValueError("No collection name specified")
+
+        with self.client_factory as client:
+            if not client.collections.exists(collection_name):
+                collection = self.create_collection(params)
+            else:
+                collection = client.collections.get(collection_name)
+
+        tenant_name: Optional[str] = params.get("tenant_name", None)
+        if tenant_name is None:
+            return collection
+
+        with self.client_factory as client:
+            if not collection.tenants.exists(tenant_name):
+                return self.create_tenant(collection_name, tenant_name)
+            else:
+                return collection.with_tennant(tenant_name)
 
     def persist_document(
             self,
@@ -187,25 +226,24 @@ class WeaviatePersistor:
                 collection_name=collection_name,
             )
             collection = client.collections.get(collection_name)
-            if tenant_name is not None:
-                if collection.tenants.exists(tenant_name):
-                    logger.debug(
-                        "connecting to tenant '{tenant_name}' "
-                        "within collection '{collection_name}'",
-                        collection_name=collection_name,
-                        tenant_name=tenant_name,
-                    )
-                    collection = collection.with_tenant(tenant_name)
-                else:
-                    logger.error(
-                        "tenant with name {tenant_name} does not exist "
-                        "in collection {collection_name}",
-                        tenant_name=tenant_name,
-                        collection_name=collection_name,
-                    )
-                    raise KeyError(
-                        f"Tenant {tenant_name} does not exist "
-                        f"in collection {collection_name}")
+
+        if tenant_name is not None:
+            if not collection.tenants.exists(tenant_name):
+                logger.error(
+                    "tenant '{tenant_name}' does not exist in collection '{collection_name}'",
+                    tenant_name=tenant_name,
+                    collection_name=collection_name,
+                )
+                raise KeyError(
+                    f"Tenant {tenant_name} does not exist in collection {collection_name}")
+
+            logger.debug(
+                "connecting to tenant '{tenant_name}' "
+                "within collection '{collection_name}'",
+                collection_name=collection_name,
+                tenant_name=tenant_name,
+            )
+            collection = collection.with_tenant(tenant_name)
 
         logger.info(
             "Connected to collection 'collection_name', persisting {nr_chunks} chunks, "
