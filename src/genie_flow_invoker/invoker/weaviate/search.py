@@ -9,7 +9,7 @@ from weaviate.collections.classes.filters import _Filters
 from weaviate.collections.classes.internal import Object
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
-from src.genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
+from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 
 
 def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
