@@ -1,3 +1,4 @@
+import json
 from abc import ABC, abstractmethod
 from inspect import signature
 from typing import Optional, Any, Callable
@@ -17,10 +18,16 @@ def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
         key_name, indicator = key.rsplit(" ", 1)
     else:
         key_name = key
-        indicator = "="
+        indicator = "=="
+    logger.debug(
+        "found indicator {indicator} for property {property} for value {value}",
+        indicator=indicator,
+        property=key_name,
+        value=value,
+    )
     filter_by_property = Filter.by_property(key_name)
     match indicator:
-        case "=":
+        case "==":
             return filter_by_property.equal(value)
         case "!=":
             return filter_by_property.not_equal(value)
@@ -35,6 +42,11 @@ def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
         case "@":
             return filter_by_property.contains_any(value)
         case _:
+            logger.error(
+                "Invalid indicator '{indicator}' for property {property}",
+                indicator=indicator,
+                property=key_name,
+            )
             raise ValueError(
                 f"Got filter indicator '{indicator}' that is not supported"
             )
@@ -44,6 +56,7 @@ def compile_filter(query_params: dict) -> Optional[Filter]:
     query_filter = None
 
     if query_params["having_all"] is not None:
+        logger.debug("building an `all_of' filter")
         query_filter = Filter.all_of(
             [
                 _create_attribute_filter(key, value)
@@ -51,6 +64,7 @@ def compile_filter(query_params: dict) -> Optional[Filter]:
             ]
         )
     if query_params["having_any"] is not None:
+        logger.debug("building an `any_of' filter")
         any_filter = Filter.any_of(
             [
                 _create_attribute_filter(key, value)
@@ -83,6 +97,10 @@ def compile_chunked_documents(
     :return: a list of ChunkedDocument, com
     """
     document_index: dict[str, ChunkedDocument] = dict()
+    logger.debug(
+        "creating a list of chunked document for {nr_chunks} chunks",
+        nr_chunks=len(query_results),
+    )
     for o in query_results:
         properties = o.properties
         chunk = DocumentChunk(
@@ -96,23 +114,44 @@ def compile_chunked_documents(
             parent_id=str(o.references["parent"][0].uuid) if o.references else None,
             embedding=o.vector[named_vector] if o.vector is not None else None,
         )
+        logger.debug(
+            "created a chunk with id {chunk_id}",
+            chunk_id=chunk.chunk_id,
+            **chunk.model_dump(),
+        )
         filename = properties["filename"]
         try:
             document_index[filename].chunks.append(chunk)
         except KeyError:
+            logger.debug(
+                f"creating a new ChunkedDocument for filename {filename}",
+                filename=filename,
+            )
             document_index[filename] = ChunkedDocument(
                 filename=filename,
                 document_metadata=properties["document_metadata"],
                 chunks=[chunk],
             )
+    logger.debug(
+        "created {nr_documents} chunked documents from these chunks",
+        nr_documents=len(document_index.keys()),
+    )
     return [document for document in document_index.values()]
 
 
 def _calculate_operation_level(
     collection: Collection, operation_level: Optional[int]
 ) -> int:
+    logger.debug(
+        "calculating operation level {operation_level}",
+        operation_level=operation_level,
+    )
     response = collection.aggregate.over_all(
         return_metrics=Metrics("hierarchy_level").integer(maximum=True),
+    )
+    logger.debug(
+        "found highest hierarchy level {max_hierarchy_level}",
+        max_hierarchy_level=response.properties["hierarchy_level"].maximum,
     )
     return response.properties["hierarchy_level"].maximum + operation_level + 1
 
@@ -141,6 +180,11 @@ class AbstractSearcher(ABC):
             limit=cast_or_none(query_params, "top", int),
             distance=cast_or_none(query_params, "horizon", float),
         )
+        logger.debug(
+            "setting base query parameters to {json_base_params}",
+            json_base_params=json.dumps(self.base_query_params),
+            **self.base_query_params,
+        )
 
     def create_query_params(self, **kwargs) -> dict[str, Any]:
         """
@@ -167,6 +211,10 @@ class AbstractSearcher(ABC):
         :param kwargs: additional keyword arguments to pass to weaviate
         :return: a dictionary of query parameters to be used
         """
+        logger.debug(
+            "creating query parameters using kwargs {json_kwargs}",
+            json_kwargs=json.dumps(kwargs),
+        )
         query_params = self.base_query_params.copy()
         query_params.update(**kwargs)
 
@@ -217,6 +265,10 @@ class AbstractSearcher(ABC):
             else:
                 query_params["filter"] = hierarchy_filter
 
+        logger.debug(
+            "created query parameters for keys: {param_keys}",
+            param_keys=query_params.keys(),
+        )
         return query_params
 
     def apply_parent_strategy(
@@ -241,7 +293,9 @@ class AbstractSearcher(ABC):
         if "parent_strategy" in kwargs:
             parent_strategy = kwargs["parent_strategy"]
         if parent_strategy is None:
+            logger.debug("no parent strategy set")
             return query_results
+        logger.debug("parent strategy set to {parent_strategy}", parent_strategy=parent_strategy)
 
         seen_parents = set()
         if parent_strategy == "replace":
@@ -252,6 +306,11 @@ class AbstractSearcher(ABC):
                     if parent.uuid not in seen_parents:
                         parents.append(parent)
                         seen_parents.add(parent.uuid)
+            logger.debug(
+                "returning {nr_parents} parents from {nr_children} children",
+                nr_parents=len(parents),
+                nr_children=len(query_results),
+            )
             return parents
 
         # return a combined list of children and their parents, making sure that
@@ -263,6 +322,11 @@ class AbstractSearcher(ABC):
                 if parent.uuid not in seen_parents:
                     combined.append(parent)
                     seen_parents.add(parent.uuid)
+        logger.debug(
+            "returning a combined total of {nr_objects} from {nr_children} children",
+            nr_objects=len(combined),
+            nr_children=len(query_results),
+        )
         return combined
 
     @abstractmethod
@@ -286,6 +350,10 @@ class AbstractSearcher(ABC):
         """
         query_params = self.create_query_params(**kwargs)
         collection = query_params["collection"]
+        logger.info(
+            "conducting search on collection {collection_name}",
+            collection_name=collection.name,
+        )
 
         # bind the necessary arguments to the values in query_params
         search_function = self._conduct_search(collection)
@@ -293,6 +361,11 @@ class AbstractSearcher(ABC):
         bound = sig.bind(**query_params)
 
         # conduct the search and apply the parent strategy
+        logger.debug(
+            "using search function {function_name} with parameters {parameters}",
+            function_name=search_function.__name__,
+            parameters=bound.arguments.keys(),
+        )
         query_results = search_function(**bound.arguments)
         query_results = self.apply_parent_strategy(query_results, **query_params)
 

@@ -98,6 +98,14 @@ class WeaviateSimilaritySearchInvoker(ConfiguredWeaviateSimilaritySearchInvoker)
         return SimilaritySearcher
 
     def _parse_input(self, content: str) -> dict[str, Any]:
+        logger.debug(
+            "invoking similarity search for content {content}",
+            content=content,
+        )
+        logger.info(
+            "invoking similarity search for content hash {content_hash}",
+            content_hash=md5(content.encode("utf-8")).hexdigest(),
+        )
         return dict(query_text=content)
 
 
@@ -117,6 +125,16 @@ class WeaviateVectorSimilaritySearchInvoker(ConfiguredWeaviateSimilaritySearchIn
         except json.decoder.JSONDecodeError:
             logger.error("invalid content '{content}'", content=content)
             raise ValueError("expected a JSON encoded list of floats")
+        logger.debug(
+            "invoking similarity search for vector of {nr_dims} dimensions, "
+            "starting with {first_values}",
+            nr_dims=len(query_vector),
+            first_values=query_vector[0:3],
+        )
+        logger.info(
+            "invoking similarity search for vector of {nr_dims} dimensions",
+            nr_dims=len(query_vector),
+        )
         return dict(query_vector=query_vector)
 
 
@@ -135,4 +153,13 @@ class WeaviateSimilaritySearchRequestInvoker(ConfiguredWeaviateSimilaritySearchI
         except ValidationError as e:
             logger.error("could not parse invalid content '{content}'", content=content)
             raise ValueError("invalid content '{content}'".format(content=content))
+        logger.debug(
+            "invoking similarity search using parameters: {json_query_params}",
+            json_query_params=query_params.model_dump_json(),
+            **query_params.model_dump(),
+        )
+        logger.info(
+            "invoking similarity search using parameters: {params}",
+            params=query_params.model_dump().keys(),
+        )
         return query_params.model_dump()
