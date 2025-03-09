@@ -25,7 +25,7 @@ def test_search_invoke(weaviate_client_factory):
 
     chunk = result.chunks[0]
     assert chunk.chunk_id == str(uuid.uuid3(uuid.NAMESPACE_OID, "first document"))
-    assert chunk.hierarchy_level == 0
+    assert chunk.hierarchy_level == 1
     assert chunk.content == "Hello World"
 
 

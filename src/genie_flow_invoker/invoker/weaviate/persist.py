@@ -246,7 +246,7 @@ class WeaviatePersistor:
             collection = collection.with_tenant(tenant_name)
 
         logger.info(
-            "Connected to collection 'collection_name', persisting {nr_chunks} chunks, "
+            "Connected to collection '{collection_name}', persisting {nr_chunks} chunks, "
              "for file '{filename}'",
             collection_name=collection.name,
             nr_chunks=len(document.chunks),
@@ -269,7 +269,7 @@ class WeaviatePersistor:
                     "original_span_start": chunk.original_span[0],
                     "original_span_end": chunk.original_span[1],
                     "hierarchy_level": chunk.hierarchy_level,
-                    "document_metadata": document.metadata,
+                    "document_metadata": document.document_metadata,
                 }
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
 
