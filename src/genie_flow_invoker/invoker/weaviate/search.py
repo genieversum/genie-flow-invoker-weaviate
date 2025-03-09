@@ -66,8 +66,8 @@ def compile_filter(query_params: dict) -> Optional[Filter]:
 
 
 def compile_chunked_documents(
-        query_results: list[Object],
-        named_vector: str = "default",
+    query_results: list[Object],
+    named_vector: str = "default",
 ) -> list[ChunkedDocument]:
     """
     Given a list of Weaviate Objects, create a list of `ChunkedDocument`s, where each chunked
@@ -88,7 +88,10 @@ def compile_chunked_documents(
         chunk = DocumentChunk(
             chunk_id=str(o.uuid),
             content=properties["content"],
-            original_span=(properties["original_span_start"], properties["original_span_end"]),
+            original_span=(
+                properties["original_span_start"],
+                properties["original_span_end"],
+            ),
             hierarchy_level=properties["hierarchy_level"],
             parent_id=str(o.references["parent"][0].uuid) if o.references else None,
             embedding=o.vector[named_vector] if o.vector is not None else None,
@@ -105,7 +108,9 @@ def compile_chunked_documents(
     return [document for document in document_index.values()]
 
 
-def _calculate_operation_level(collection: Collection, operation_level: Optional[int]) -> int:
+def _calculate_operation_level(
+    collection: Collection, operation_level: Optional[int]
+) -> int:
     response = collection.aggregate.over_all(
         return_metrics=Metrics("hierarchy_level").integer(maximum=True),
     )
@@ -162,7 +167,7 @@ class AbstractSearcher(ABC):
         :param kwargs: additional keyword arguments to pass to weaviate
         :return: a dictionary of query parameters to be used
         """
-        query_params =  self.base_query_params.copy()
+        query_params = self.base_query_params.copy()
         query_params.update(**kwargs)
 
         if query_params.get("collection_name", None) in [None, ""]:
@@ -201,8 +206,12 @@ class AbstractSearcher(ABC):
         if query_params["operation_level"] is not None:
             operation_level = query_params["operation_level"]
             if operation_level < 0:
-                operation_level = _calculate_operation_level(collection, operation_level)
-            hierarchy_filter = Filter.by_property("hierarchy_level").equal(operation_level)
+                operation_level = _calculate_operation_level(
+                    collection, operation_level
+                )
+            hierarchy_filter = Filter.by_property("hierarchy_level").equal(
+                operation_level
+            )
             if query_params["filter"] is not None:
                 query_params["filter"] &= hierarchy_filter
             else:
@@ -211,9 +220,9 @@ class AbstractSearcher(ABC):
         return query_params
 
     def apply_parent_strategy(
-            self,
-            query_results: list[Object],
-            **kwargs,
+        self,
+        query_results: list[Object],
+        **kwargs,
     ) -> list[Object]:
         """
         Apply a parent strategy to the query results. The parent strategy is determined from
@@ -288,7 +297,9 @@ class AbstractSearcher(ABC):
         query_results = self.apply_parent_strategy(query_results, **query_params)
 
         # compile the list of chunked documents and return it
-        return compile_chunked_documents(query_results, named_vector=query_params["target_vector"])
+        return compile_chunked_documents(
+            query_results, named_vector=query_params["target_vector"]
+        )
 
 
 class SimilaritySearcher(AbstractSearcher):
@@ -299,9 +310,12 @@ class SimilaritySearcher(AbstractSearcher):
     def _conduct_search(self, collection: Collection, **kwargs) -> Callable:
         return collection.query.near_text
 
+
 class VectorSimilaritySearcher(AbstractSearcher):
 
-    def create_query_params(self, query_embedding: list[float], **kwargs) -> dict[str, Any]:
+    def create_query_params(
+        self, query_embedding: list[float], **kwargs
+    ) -> dict[str, Any]:
         return super().create_query_params(near_vector=query_embedding, **kwargs)
 
     def _conduct_search(self, collection: Collection) -> Callable:

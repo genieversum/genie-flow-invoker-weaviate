@@ -7,18 +7,21 @@ from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
 
 from genie_flow_invoker.genie import GenieInvoker
-from src.genie_flow_invoker.invoker.weaviate.client import WeaviateClientFactory
-from src.genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest
-from src.genie_flow_invoker.invoker.weaviate.search import SimilaritySearcher, \
-    AbstractSearcher, VectorSimilaritySearcher
+from genie_flow_invoker.invoker.weaviate.client import WeaviateClientFactory
+from genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest
+from genie_flow_invoker.invoker.weaviate.search import (
+    SimilaritySearcher,
+    AbstractSearcher,
+    VectorSimilaritySearcher,
+)
 
 
 class AbstractWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
 
     def __init__(
-            self,
-            client_factory: WeaviateClientFactory,
-            query_config: dict[str, Any],
+        self,
+        client_factory: WeaviateClientFactory,
+        query_config: dict[str, Any],
     ) -> None:
         self.client_factory = client_factory
         self.query_config = query_config
@@ -37,12 +40,14 @@ class AbstractWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
         return cls(client_factory, query_config)
 
 
-class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateSimilaritySearchInvoker, ABC):
+class ConfiguredWeaviateSimilaritySearchInvoker(
+    AbstractWeaviateSimilaritySearchInvoker, ABC
+):
 
     def __init__(
-            self,
-            client_factory: WeaviateClientFactory,
-            query_config: dict[str, Any],
+        self,
+        client_factory: WeaviateClientFactory,
+        query_config: dict[str, Any],
     ) -> None:
         """
         A Genie Invoker to retrieve documents from Weaviate, using similarity search.
@@ -75,7 +80,7 @@ class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateSimilaritySearch
         logger.debug(f"invoking weaviate with '{content}'")
         logger.info(
             "invoking similarity search for content hash {content_hash}",
-            content_hash=md5(content.encode("utf-8")).hexdigest()
+            content_hash=md5(content.encode("utf-8")).hexdigest(),
         )
         search_params = self._parse_input(content)
         results = self.searcher.search(**search_params)
@@ -131,4 +136,3 @@ class WeaviateSimilaritySearchRequestInvoker(ConfiguredWeaviateSimilaritySearchI
             logger.error("could not parse invalid content '{content}'", content=content)
             raise ValueError("invalid content '{content}'".format(content=content))
         return query_params.model_dump()
-

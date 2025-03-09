@@ -23,14 +23,11 @@ class WeaviateSimilaritySearchRequest(SimilaritySearchRequest):
         description="The alpha parameter for Weaviate hybrid search",
     )
     collection_name: Optional[str] = Field(
-        default=None,
-        description="The collection name for the similarity search"
+        default=None, description="The collection name for the similarity search"
     )
     tenant_name: Optional[str] = Field(
-        default=None,
-        description="The tenant name for the similarity search"
+        default=None, description="The tenant name for the similarity search"
     )
     vector_name: Optional[str] = Field(
-        default=None,
-        description="The named vector for the similarity search"
+        default=None, description="The named vector for the similarity search"
     )

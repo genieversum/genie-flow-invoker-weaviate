@@ -1,6 +1,5 @@
 import uuid
 
-from genie_flow_invoker.doc_proc import ChunkedDocument
 from genie_flow_invoker.invoker.weaviate import SimilaritySearcher
 from weaviate.collections.classes.filters import _FilterAnd, _FilterOr, _FilterValue, _Operator
 
