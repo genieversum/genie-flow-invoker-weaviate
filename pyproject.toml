@@ -21,7 +21,7 @@ classifiers=[
 dependencies=[
     "loguru~=0.7.2",
     "genie-flow-invoker==0.6.2rc2",
-    "weaviate-client~=4.6.5",
+    "weaviate-client~=4.11.1",
     "pydantic~=2.10.6",
 ]
 dynamic = ["version"]
