@@ -218,8 +218,13 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
             )
             raise ValueError("invalid content '{content}'")
 
-        self.persistor.persist_document(
-            request.document,
-            request.collection_name,
-            request.tenant_name,
-        )
+        try:
+            self.persistor.persist_document(
+                request.document,
+                request.collection_name,
+                request.tenant_name,
+            )
+        except Exception as e:
+            return "persisting failed because of error: {str(e)}"
+
+        return "ok"
