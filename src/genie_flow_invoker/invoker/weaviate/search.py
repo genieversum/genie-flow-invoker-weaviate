@@ -116,7 +116,6 @@ def compile_chunked_documents(
         )
         logger.debug(
             "created a chunk with id {chunk_id}",
-            chunk_id=chunk.chunk_id,
             **chunk.model_dump(),
         )
         filename = properties["filename"]
