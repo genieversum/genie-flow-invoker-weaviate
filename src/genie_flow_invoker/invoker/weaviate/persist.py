@@ -1,9 +1,12 @@
+from collections import defaultdict
 from typing import Optional
 
-from genie_flow_invoker.doc_proc import ChunkedDocument
+from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
+from loguru import logger
 from weaviate.collections import Collection
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
+from weaviate.collections.classes.internal import Object
 
 
 def _compile_properties(params: dict):
@@ -92,6 +95,20 @@ def _compile_cross_references(params: dict):
     ]
 
 
+def _compile_object(
+        chunk: DocumentChunk,
+        collection_name: str,
+        filename: str,
+        document_metadata: dict,
+) -> Object:
+    return Object(
+        collection=collection_name,
+        uuid=chunk.chunk_id,
+
+        references={"parent": chunk.parent_id},
+        me
+    )
+
 class WeaviatePersistor:
 
     def __init__(self, client_factory: WeaviateClientFactory, persist_params: dict) -> None:
@@ -119,12 +136,121 @@ class WeaviatePersistor:
                 references=_compile_cross_references(params)
             )
 
-    def create_tenant(self, collection_name: str, tenant_name: str):
+    def create_tenant(self, collection_name: str, tenant_name: str, idempotent: bool = False):
+        """
+        Create a new tenant for a collection with a given name. If a tenant already exists,
+        with the given tenant name, a KeyError is raised - unless idempotent is set to True
+        in which case the creation is silently ignored.
+
+        :param collection_name: name of the collection to add to
+        :param tenant_name: the name of the tenant to add
+        :param idempotent: boolean indicating to accept creation of an already existing tenant.
+                           Defaults to False
+        """
         with self.client_factory as client:
             if not client.collections.exists(collection_name):
                 raise KeyError(f"Collection {collection_name} does not exist")
 
-            client.collections.get(collection_name).tenants.create([tenant_name])
+            collection = client.collections.get(collection_name)
+            if collection.tenants.exists(tenant_name):
+                if idempotent:
+                    return
+                raise KeyError(f"Tenant {tenant_name} already exists")
 
-    def persist_document(self, document: ChunkedDocument) -> None:
-        for chunk in document.chunk_iterator()
+            collection.tenants.create([tenant_name])
+
+    def persist_document(
+            self,
+            document: ChunkedDocument,
+            collection_name: str,
+            tenant_name: Optional[str] = None,
+    ) -> None:
+        """
+        Persist a given chunked document into a collection with the given name and potentially
+        into a tenant with the given name.
+
+        The hierarchy of the chunks in this document is retained and the document filename and
+        other metadata is persisted with each and every Object.
+
+        :param document: the `ChunkedDocument` to persist
+        :param collection_name: the name of the collection to store it into
+        :param tenant_name: an Optional name of a tenant to store the document into.
+        :return: None
+        """
+        chunk_index = defaultdict(list)
+        for chunk in document.chunks:
+            chunk_index[chunk.hierarchy_level].append(chunk)
+
+        with self.client_factory as client:
+            logger.debug(
+                "connecting to collection '{collection_name}'",
+                collection_name=collection_name,
+            )
+            collection = client.collections.get(collection_name)
+            if tenant_name is not None:
+                if collection.tenants.exists(tenant_name):
+                    logger.debug(
+                        "connecting to tenant '{tenant_name}' "
+                        "within collection '{collection_name}'",
+                        collection_name=collection_name,
+                        tenant_name=tenant_name,
+                    )
+                    collection = collection.with_tenant(tenant_name)
+                else:
+                    logger.error(
+                        "tenant with name {tenant_name} does not exist "
+                        "in collection {collection_name}",
+                        tenant_name=tenant_name,
+                        collection_name=collection_name,
+                    )
+                    raise KeyError(
+                        f"Tenant {tenant_name} does not exist "
+                        f"in collection {collection_name}")
+
+        logger.info(
+            "Connected to collection 'collection_name', persisting {nr_chunks} chunks, "
+             "for file '{filename}'",
+            collection_name=collection.name,
+            nr_chunks=len(document.chunks),
+            filename=document.filename,
+        )
+
+        # making sure we add the chunks from top to bottom
+        for hierarchy_level, chunks in chunk_index.items():
+            logger.debug(
+                "persisting {nr_chunks} chunk(s) at hierarchy level {hierarchy_level}",
+                nr_chunks=len(chunks),
+                hierarchy_level=hierarchy_level,
+            )
+            for chunk in chunks:
+                properties = {
+                    "filename": document.filename,
+                    "content": chunk.content,
+                    "original_span_start": chunk.original_span[0],
+                    "original_span_end": chunk.original_span[1],
+                    "hierarchy_level": chunk.hierarchy_level,
+                    "document_metadata": document.metadata,
+                }
+                references = {"parent": chunk.parent_id} if chunk.parent_id else None,
+                if not collection.data.exists(chunk.chunk_id):
+                    logger.debug(
+                        "inserting chunk with id {chunk_id}",
+                        chunk_id=chunk.chunk_id,
+                    )
+                    collection.data.insert(
+                        uuid=chunk.chunk_id,
+                        properties=properties,
+                        references=references,
+                        vector=chunk.embedding,
+                    )
+                else:
+                    logger.debug(
+                        "replacing chunk with id {chunk_id}",
+                        chunk_id=chunk.chunk_id,
+                    )
+                    collection.data.replace(
+                        uuid=chunk.chunk_id,
+                        properties=properties,
+                        references=references,
+                        vector=chunk.embedding,
+                    )
