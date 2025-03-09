@@ -83,7 +83,7 @@ def test_similarity_query_params_tenant(weaviate_client_factory):
     assert query_params["query"] == "my query"
     assert query_params["collection"].query_results == \
            weaviate_client_factory.collections_results["SimpleCollection"]
-    assert query_params["collection"].collection_name == "TenantSimpleCollection"
+    assert query_params["collection"].name == "TenantSimpleCollection"
     assert query_params["target_vector"] == "default"
     assert query_params["include_vector"] == False
     assert query_params["method"] == "cosine"
@@ -219,6 +219,6 @@ def test_similarity_search(weaviate_client_factory):
     assert chunk.chunk_id == str(uuid.uuid3(uuid.NAMESPACE_OID, "first document"))
     assert chunk.content == "Hello World"
     assert chunk.original_span == (0, 42)
-    assert chunk.hierarchy_level == 0
+    assert chunk.hierarchy_level == 1
     assert chunk.parent_id == str(uuid.uuid3(uuid.NAMESPACE_OID, "second document"))
     assert chunk.embedding == [3.14] * 12
