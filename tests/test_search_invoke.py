@@ -20,10 +20,10 @@ def test_search_invoke(weaviate_client_factory):
     assert len(result) == 1
 
     result = result[0]
-    assert len(result.chunks) == 1
+    assert len(result.chunks) == 2
     assert result.document_metadata["source"] == "pdf"
 
-    chunk = result.chunks[0]
+    chunk = result.chunks[1]
     assert chunk.chunk_id == str(uuid.uuid3(uuid.NAMESPACE_OID, "first document"))
     assert chunk.hierarchy_level == 1
     assert chunk.content == "Hello World"

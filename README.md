@@ -143,6 +143,46 @@ It is up to the caller to pass at least the `query_embedding` attribute, as foll
 but all other parameters can be included in this JSON object.
 
 
+## Persisting
+Persisting is done through the `ChunkedDocument` object. There exist one invoker for this,
+called `WeaviatePersistInvoker` than expects a JSON version of a `WeaviatePersistenceRequest`
+object.
+
+A document chunk can be inserted or replaced. If there is already a chunk with the same `chunk_id`
+then that chunk will be replaced. Otherwise it will be inserted.
+
+### Weaviate Persistence Request
+This object should contain:
+
+`collection_name`
+: an optional name of the collection to persist the document into. If not given, the persisting
+is done into the collection named in the `meta.yaml` configuration. Lacking that, a `ValueError`
+is raised.
+
+`tenant_name`
+: an optional name of a tenant within the collection. If not provided, the invoker will fall
+back onto a tenant name configured in `meta.yaml`. If no tenant has been configured, this
+invoker expects a collection that is not enabled for tenants.
+
+`document`
+: The `ChunkedDocument` that needs to be persisted. The ChunkedDocument should contain `chunks`
+that can potentially contain an `embedding`. If no embedding is set, it is up to Weaviate to
+do the content embedding in the way it is configured.
+
+The invoker returns a JSON object containing the following attributes:
+
+`collection_name`
+: the collection that the document (chunks) were stored in
+
+`tenant_name`
+: the optional name of the tenant the document chunks were stored in
+
+`nr_inserts`
+: the number of chunks inserted
+
+`nr_replaces`
+: the number of chunks that have been replaced
+
 ## Data Model
 The collection in Weaviate will contain the following data model for each of the objects:
 

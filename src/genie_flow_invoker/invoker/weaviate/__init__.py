@@ -259,4 +259,3 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
             nr_inserts=nr_inserted,
             nr_replaces=nr_replaced,
         ).model_dump_json()
-b

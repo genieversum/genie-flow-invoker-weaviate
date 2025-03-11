@@ -213,9 +213,9 @@ def test_similarity_search(weaviate_client_factory):
     assert result.filename == "some_file.txt"
     assert result.document_metadata["language"] == "en"
     assert result.document_metadata["source"] == "pdf"
-    assert len(result.chunks) == 1
+    assert len(result.chunks) == 2
 
-    chunk = result.chunks[0]
+    chunk = result.chunks[1]
     assert chunk.chunk_id == str(uuid.uuid3(uuid.NAMESPACE_OID, "first document"))
     assert chunk.content == "Hello World"
     assert chunk.original_span == (0, 42)
