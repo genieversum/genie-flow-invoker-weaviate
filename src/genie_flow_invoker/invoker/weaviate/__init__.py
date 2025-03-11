@@ -247,15 +247,16 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
             )
             raise ValueError("invalid content '{content}'")
 
-        nr_inserted, nr_replaced = self.persistor.persist_document(
+        collection_name, tenant_name, nr_inserted, nr_replaced = self.persistor.persist_document(
             request.document,
             request.collection_name,
             request.tenant_name,
         )
 
         return WeaviatePersistenceResponse(
-            collection_name=request.collection_name,
-            tenant_name=request.tenant_name,
+            collection_name=collection_name,
+            tenant_name=tenant_name,
             nr_inserts=nr_inserted,
             nr_replaces=nr_replaced,
         ).model_dump_json()
+b

@@ -34,14 +34,15 @@ class WeaviateSimilaritySearchRequest(SimilaritySearchRequest):
 
 
 class WeaviatePersistenceRequest(BaseModel):
-    collection_name: str = Field(
+    collection_name: Optional[str] = Field(
+        default=None,
         description="The collection name to store the chunked document in",
     )
     tenant_name: Optional[str] = Field(
         default=None,
         description="The tenant name to store the chunked document in",
     )
-    docment: ChunkedDocument = Field(
+    document: ChunkedDocument = Field(
         description="The document to persist",
     )
 

@@ -43,7 +43,9 @@ def _compile_multi_tenancy(params: dict):
     :param params: the configuration parameters, potentially containing a `multy_tenancy` dictionary
     :return: the multy tenancy configuration settings
     """
-    config = dict(enabled=True, auto_tenant_creation=False, auto_tenant_activation=False)
+    config = dict(
+        enabled=True, auto_tenant_creation=False, auto_tenant_activation=False
+    )
     config.update(params.get("multi_tenancy", {}))
     return Configure.multi_tenancy(**config)
 
@@ -66,14 +68,17 @@ def _compile_named_vectors(params: dict):
         }
     }
     config.update(params.get("named_vectors", {}))
-    return params.get("named_vectors", [
-        getattr(Configure.NamedVectors, value["vectorizer"])(
-            name=key,
-            source_properties=value["source_properties"],
-            vector_index_config=Configure.VectorIndex.hnsw()
-        )
-        for key, value in config.items()
-    ])
+    return params.get(
+        "named_vectors",
+        [
+            getattr(Configure.NamedVectors, value["vectorizer"])(
+                name=key,
+                source_properties=value["source_properties"],
+                vector_index_config=Configure.VectorIndex.hnsw(),
+            )
+            for key, value in config.items()
+        ],
+    )
 
 
 def _compile_cross_references(params: dict):
@@ -96,7 +101,9 @@ def _compile_cross_references(params: dict):
 
 class WeaviatePersistor:
 
-    def __init__(self, client_factory: WeaviateClientFactory, persist_params: dict) -> None:
+    def __init__(
+        self, client_factory: WeaviateClientFactory, persist_params: dict
+    ) -> None:
         self.client_factory = client_factory
 
         self.base_persist_params = dict(
@@ -104,7 +111,22 @@ class WeaviatePersistor:
             tenant_name=persist_params.get("tenant_name", None),
         )
 
-    def create_collection(self, persist_params: dict, omnipotent: bool = False) -> Collection:
+    def compile_collection_tenant_names(
+        self,
+        collection_name: Optional[str],
+        tenant_name: Optional[str],
+    ) -> tuple[str, Optional[str]]:
+        result = (
+            collection_name or self.base_persist_params.get("collection_name"),
+            tenant_name or self.base_persist_params.get("tenant_name"),
+        )
+        if result[0] is None:
+            raise ValueError("collection_name is required")
+        return result
+
+    def create_collection(
+        self, persist_params: dict, omnipotent: bool = False
+    ) -> Collection:
         """
         Create a new collection with the given name and the configuration that is compiled from
         the given persist_params. Raises a ValueError when a collection with that name
@@ -124,30 +146,32 @@ class WeaviatePersistor:
 
         with self.client_factory as client:
             if client.collections.exists(collection_name):
-                if not omnipotent:
-                    logger.error(
-                        "Cannot create collection with name '{collection_name}' "
-                        "because it already exists.",
+                if omnipotent:
+                    logger.warning(
+                        "Skipping creation of collection '{collection_name}' that already exists.",
                         collection_name=collection_name,
                     )
-                    raise ValueError("Collection {collection_name} already exists")
-                logger.warning(
-                    "Skipping creation of collection '{collection_name}' that already exists.",
+                    return client.collections.get(collection_name)
+
+                logger.error(
+                    "Cannot create collection with name '{collection_name}' "
+                    "because it already exists.",
                     collection_name=collection_name,
                 )
-                return
-            client.collections.create(
+                raise ValueError("Collection {collection_name} already exists")
+
+            return client.collections.create(
                 name=collection_name,
                 properties=_compile_properties(params),
                 multi_tenancy_config=_compile_multi_tenancy(params),
-                references=_compile_cross_references(params)
+                references=_compile_cross_references(params),
             )
 
     def create_tenant(
-            self,
-            collection_name: str,
-            tenant_name: str,
-            idempotent: bool = False,
+        self,
+        collection_name: str,
+        tenant_name: str,
+        idempotent: bool = False,
     ) -> Collection:
         """
         Create a new tenant for a collection with a given name. If a tenant already exists,
@@ -170,7 +194,7 @@ class WeaviatePersistor:
                         "Skipping creation of tenant '{tenant_name}' that already exists.",
                         tenant_name=tenant_name,
                     )
-                    return
+                    return collection.with_tenant(tenant_name)
                 raise ValueError(f"Tenant {tenant_name} already exists")
 
         collection.tenants.create([tenant_name])
@@ -198,11 +222,11 @@ class WeaviatePersistor:
                 return collection.with_tennant(tenant_name)
 
     def persist_document(
-            self,
-            document: ChunkedDocument,
-            collection_name: str,
-            tenant_name: Optional[str] = None,
-    ) -> tuple[int, int]:
+        self,
+        document: ChunkedDocument,
+        collection_name: Optional[str] = None,
+        tenant_name: Optional[str] = None,
+    ) -> tuple[str, Optional[str], int, int]:
         """
         Persist a given chunked document into a collection with the given name and potentially
         into a tenant with the given name.
@@ -213,9 +237,13 @@ class WeaviatePersistor:
         :param document: the `ChunkedDocument` to persist
         :param collection_name: the name of the collection to store it into
         :param tenant_name: an Optional name of a tenant to store the document into.
-        :return: tuple of nr_inserted and nr_replaces, respectively the number of inserted and
-                 replaced chunks
+        :return: tuple of the used collection_name and tenant_name, nr_inserted and nr_replaces,
+                respectively the number of inserted and replaced chunks
         """
+        collection_name, tenant_name = self.compile_collection_tenant_names(
+            collection_name, tenant_name
+        )
+
         chunk_index = defaultdict(list)
         for chunk in document.chunks:
             chunk_index[chunk.hierarchy_level].append(chunk)
@@ -235,7 +263,8 @@ class WeaviatePersistor:
                     collection_name=collection_name,
                 )
                 raise KeyError(
-                    f"Tenant {tenant_name} does not exist in collection {collection_name}")
+                    f"Tenant {tenant_name} does not exist in collection {collection_name}"
+                )
 
             logger.debug(
                 "connecting to tenant '{tenant_name}' "
@@ -247,7 +276,7 @@ class WeaviatePersistor:
 
         logger.info(
             "Connected to collection '{collection_name}', persisting {nr_chunks} chunks, "
-             "for file '{filename}'",
+            "for file '{filename}'",
             collection_name=collection.name,
             nr_chunks=len(document.chunks),
             filename=document.filename,
@@ -274,7 +303,9 @@ class WeaviatePersistor:
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
 
                 if not collection.data.exists(chunk.chunk_id):
-                    logger.debug("inserting chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
+                    logger.debug(
+                        "inserting chunk with id {chunk_id}", chunk_id=chunk.chunk_id
+                    )
                     collection.data.insert(
                         uuid=chunk.chunk_id,
                         properties=properties,
@@ -283,7 +314,9 @@ class WeaviatePersistor:
                     )
                     nr_inserted += 1
                 else:
-                    logger.debug("replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
+                    logger.debug(
+                        "replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id
+                    )
                     collection.data.replace(
                         uuid=chunk.chunk_id,
                         properties=properties,
@@ -292,4 +325,4 @@ class WeaviatePersistor:
                     )
                     nr_replaced += 1
 
-        return nr_inserted, nr_replaced
+        return collection_name, tenant_name, nr_inserted, nr_replaced
