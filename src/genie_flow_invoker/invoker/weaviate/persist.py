@@ -3,10 +3,10 @@ from typing import Optional
 
 from genie_flow_invoker.doc_proc import ChunkedDocument
 from loguru import logger
-from weaviate.collections import Collection
-from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 
 from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
+from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
+from weaviate.collections import Collection
 
 
 def _compile_properties(params: dict):

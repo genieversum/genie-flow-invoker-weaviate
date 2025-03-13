@@ -1,8 +1,7 @@
-from typing import Optional, Literal, Any
+from typing import Any, Literal, Optional
 
-from genie_flow_invoker.doc_proc import SimilaritySearchRequest, ChunkedDocument
-from pydantic import Field, BaseModel
-
+from genie_flow_invoker.doc_proc import ChunkedDocument, SimilaritySearchRequest
+from pydantic import BaseModel, Field
 
 WeaviateDistanceMethodType = Literal[
     "cosine", "dot", "l2-squared", "hamming", "manhattan"
@@ -81,6 +80,12 @@ class WeaviateDeleteChunksRequest(WeaviateDeleteMessage):
     )
 
 
+class WeaviateDeleteByFilenameRequest(WeaviateDeleteMessage):
+    filename: str = Field(
+        description="The filename to filter all chunks to delete",
+    )
+
+
 class WeaviateDeleteByFilterRequest(WeaviateDeleteMessage):
     having_all: Optional[dict[str, Any]] = Field(
         default=None,
@@ -90,6 +95,7 @@ class WeaviateDeleteByFilterRequest(WeaviateDeleteMessage):
         default=None,
         description="Property filter that any need to match",
     )
+
 
 class WeaviateDeleteErrorResponse(WeaviateDeleteMessage):
     error_code: str = Field(

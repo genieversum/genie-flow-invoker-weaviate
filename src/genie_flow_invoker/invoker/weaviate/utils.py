@@ -1,6 +1,7 @@
-from typing import Optional, Any
+from typing import Any, Optional
 
 from loguru import logger
+
 from weaviate.collections.classes.filters import Filter, _Filters
 
 

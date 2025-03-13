@@ -1,4 +1,4 @@
-from typing import Any, Optional, NamedTuple, overload
+from typing import Any, NamedTuple, Optional, overload
 
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from weaviate.collections import Collection
@@ -12,14 +12,14 @@ class CollectionTenant(NamedTuple):
 class WeaviateClientProcessor:
 
     def __init__(
-            self,
-            client_factory: WeaviateClientFactory,
-            processor_params: dict[str, Any],
+        self,
+        client_factory: WeaviateClientFactory,
+        processor_params: dict[str, Any],
     ):
         self.client_factory = client_factory
         self.base_params = CollectionTenant(
             collection_name=processor_params.get("collection_name", None),
-            tenant_name=processor_params.get("tenant_name", None)
+            tenant_name=processor_params.get("tenant_name", None),
         )
 
     def compile_collection_tenant_names(
@@ -29,7 +29,7 @@ class WeaviateClientProcessor:
     ) -> tuple[str, Optional[str]]:
         result = (
             collection_name or self.base_params.collection_name,
-            tenant_name or self.base_params.tenant_name
+            tenant_name or self.base_params.tenant_name,
         )
         if result[0] is None:
             raise ValueError("collection_name is required")
@@ -37,18 +37,16 @@ class WeaviateClientProcessor:
 
     @overload
     def get_collection_or_tenant(
-            self,
-            params: dict[str, Any],
-    ) -> Collection:
-        ...
+        self,
+        params: dict[str, Any],
+    ) -> Collection: ...
 
     @overload
     def get_collection_or_tenant(
-            self,
-            collection_name: Optional[str],
-            tenant_name: Optional[str],
-    ) -> Collection:
-        ...
+        self,
+        collection_name: Optional[str],
+        tenant_name: Optional[str],
+    ) -> Collection: ...
 
     def get_collection_or_tenant(
         self,

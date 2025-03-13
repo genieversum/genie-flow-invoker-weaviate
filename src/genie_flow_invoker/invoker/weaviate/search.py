@@ -1,17 +1,17 @@
 import json
 from abc import ABC, abstractmethod
 from inspect import signature
-from typing import Optional, Any, Callable
-
-from loguru import logger
-from weaviate.collections import Collection
-from weaviate.classes.query import Filter, QueryReference, Metrics
-from weaviate.collections.classes.internal import Object
+from typing import Any, Callable, Optional
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
+from loguru import logger
+
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
 from genie_flow_invoker.invoker.weaviate.utils import compile_filter
+from weaviate.classes.query import Filter, Metrics, QueryReference
+from weaviate.collections import Collection
+from weaviate.collections.classes.internal import Object
 
 
 def compile_chunked_documents(
@@ -98,7 +98,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
             {
                 "collection_name": query_params.get("collection_name", None),
                 "tenant_name": query_params.get("tenant_name", None),
-            }
+            },
         )
 
         def cast_or_none(dictionary: dict, key: str, data_type: type):
@@ -226,7 +226,9 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         if parent_strategy is None:
             logger.debug("no parent strategy set")
             return query_results
-        logger.debug("parent strategy set to {parent_strategy}", parent_strategy=parent_strategy)
+        logger.debug(
+            "parent strategy set to {parent_strategy}", parent_strategy=parent_strategy
+        )
 
         seen_parents = set()
         if parent_strategy == "replace":

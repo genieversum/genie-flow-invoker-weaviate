@@ -7,9 +7,12 @@ from weaviate.classes.query import Filter
 from weaviate.collections.classes.batch import DeleteManyReturn
 
 from .base import WeaviateClientProcessor
-from .exceptions import NoMultiTenancySupportException, TenantNotFoundException, \
-    CollectionNotFoundException, InvalidFilterException
-from .model import WeaviateDeleteErrorResponse
+from .exceptions import (
+    CollectionNotFoundException,
+    InvalidFilterException,
+    NoMultiTenancySupportException,
+    TenantNotFoundException,
+)
 from .utils import compile_filter
 
 

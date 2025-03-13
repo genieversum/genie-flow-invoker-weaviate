@@ -183,6 +183,76 @@ The invoker returns a JSON object containing the following attributes:
 `nr_replaces`
 : the number of chunks that have been replaced
 
+## Deleting
+There is a number of invokers to delete chunks, by id and by filters, and also whole tenants
+or even collections. These deletion invokers expect a JSON version of a delete request. These
+requests can optionally take:
+
+`collection_name`
+: an optional name of a collection for the delete operation. Any name given will override what
+is defined in the `meta.yaml` for this invoker.
+
+`tenant_name`
+: an optional name of a tenant for the delete operation. Any name given will override what
+is defined in the `meta.yaml`.
+
+All delete chunk invokers will return a JSON object with the following properties:
+
+`matches`
+: the number of chunks that matched the filter
+
+`failed`
+: the number of chunks for which deletion failed
+
+`successful`
+: the number of chunks that were successfully deleted
+
+### Deleting Chunks by ID
+Deleting chunks is done through the `WeaviateDeleteChunkInvoker` that expects a
+`WeaviateDeleteChunksRequest`. Besides the generic parameters, this request should also
+contain:
+
+`chunk_id`
+: a chunk id or list of chunk ids of the chunk or chunks that need to be deleted.
+
+### Deleting Chunks by Filter
+Deleting chunks with this invoker expects a `WeaviateDeleteByFilterRequest` that, besides
+the expected collection and target names, also expects the optional properties `having_all`
+and `having_any`. This filter definition is interpreted in the exact same way as the [filter
+for search](#filter-by-properties).
+
+### Deleting Chunks by Filename
+Because this is a common use case, filtering chunks only by filename has it's own invoker
+called `WeaviateDeleteByFilenameInvoker`. The request that is made should contain the property
+`filename` that points to the filename of all the chunks that need to be deleted.
+
+### Deleting a Tenant
+The `WeaviateDeleteTenantInvoker` removes an entire tenant. There are no further properties
+to pass to the request. This may result in a number of errors or a confirmation message. If
+the JSON returned contains the property `error_code`, then something went wrong. There will
+also be a more descriptive `error` message.
+
+The `error_code` can be:
+
+`ValueError`
+: the name of the tenant to delete could not be extracted from the request
+
+`NoMultiTenancySupportException`
+: the collection referred to does not support multi-tenancy, so the tenant cannot exist
+
+`TenantNotFoundException`
+: the tenant does not exist within the referenced collection
+
+If all goes well, a JSON object is returned containing the collection and tenant name.
+
+### Deleting a Collection
+The `WeaviateDeleteCollectionInvoker` only expects the request to contain an optional
+`collection_name` attribute.
+
+This invoker may return an error response, by giving an `error_code` to be 
+`CollectionNotFoundException` when the collection that is referred to does not exist. If
+all goes well, a JSON object is returned with just the `collection_name` property set.
+
 ## Data Model
 The collection in Weaviate will contain the following data model for each of the objects:
 

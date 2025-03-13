@@ -10,18 +10,20 @@ from pydantic_core._pydantic_core import ValidationError
 from .client import WeaviateClientFactory
 from .delete import WeaviateDeleter
 from .exceptions import (
+    CollectionNotFoundException,
     InvalidFilterException,
     NoMultiTenancySupportException,
     TenantNotFoundException,
-    CollectionNotFoundException,
 )
 from .model import (
+    WeaviateDeleteByFilenameRequest,
+    WeaviateDeleteByFilterRequest,
     WeaviateDeleteChunksRequest,
+    WeaviateDeleteErrorResponse,
     WeaviateDeleteMessage,
     WeaviatePersistenceRequest,
     WeaviatePersistenceResponse,
     WeaviateSimilaritySearchRequest,
-    WeaviateDeleteErrorResponse,
 )
 from .persist import WeaviatePersistor
 from .search import AbstractSearcher, SimilaritySearcher, VectorSimilaritySearcher
@@ -307,17 +309,40 @@ class WeaviateDeleteChunkInvoker(AbstractWeaviateDeleteInvoker):
         return json.dumps(result)
 
 
+class WeaviateDeleteByFilenameInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteByFilenameRequest.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete by Filename Request")
+            raise ValueError("Failed to parse Weaviate Delete by Filename Request")
+
+        result = self.deleter.delete_chunks_by_filename(
+            filename=request.filename,
+            collection_name=request.collection_name,
+            tenant_name=request.tenant_name,
+        )
+        return json.dumps(result)
+
+
 class WeaviateDeleteByFilterInvoker(AbstractWeaviateDeleteInvoker):
 
     def invoke(self, content: str) -> str:
         try:
-            filter_definition = json.loads(content)
+            filter_definition = WeaviateDeleteByFilterRequest.model_validate_json(
+                content
+            )
         except json.decoder.JSONDecodeError:
             logger.error("failed to parse filter definition")
             raise ValueError("failed to parse filter definition")
 
         try:
-            result = self.deleter.delete_by_filter(filter_definition)
+            result = self.deleter.delete_by_filter(
+                filter_definition.model_dump(),
+                collection_name=filter_definition.collection_name,
+                tenant_name=filter_definition.tenant_name,
+            )
             return json.dumps(result)
         except InvalidFilterException as e:
             return WeaviateDeleteErrorResponse(
@@ -366,8 +391,10 @@ class WeaviateDeleteCollectionInvoker(AbstractWeaviateDeleteInvoker):
         try:
             result = self.deleter.delete_collection(request.collection_name)
         except CollectionNotFoundException as e:
-            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
+            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json(
+                exclude_none=True,
+            )
 
         return WeaviateDeleteMessage(
             collection_name=result["collection_name"]
-        ).model_dump_json()
+        ).model_dump_json(exclude_none=True)
