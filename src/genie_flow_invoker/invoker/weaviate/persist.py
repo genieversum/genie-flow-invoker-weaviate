@@ -2,10 +2,11 @@ from collections import defaultdict
 from typing import Optional
 
 from genie_flow_invoker.doc_proc import ChunkedDocument
-from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from loguru import logger
 from weaviate.collections import Collection
 from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
+
+from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
 
 
 def _compile_properties(params: dict):
@@ -99,30 +100,7 @@ def _compile_cross_references(params: dict):
     ]
 
 
-class WeaviatePersistor:
-
-    def __init__(
-        self, client_factory: WeaviateClientFactory, persist_params: dict
-    ) -> None:
-        self.client_factory = client_factory
-
-        self.base_persist_params = dict(
-            collection_name=persist_params.get("collection_name", None),
-            tenant_name=persist_params.get("tenant_name", None),
-        )
-
-    def compile_collection_tenant_names(
-        self,
-        collection_name: Optional[str],
-        tenant_name: Optional[str],
-    ) -> tuple[str, Optional[str]]:
-        result = (
-            collection_name or self.base_persist_params.get("collection_name"),
-            tenant_name or self.base_persist_params.get("tenant_name"),
-        )
-        if result[0] is None:
-            raise ValueError("collection_name is required")
-        return result
+class WeaviatePersistor(WeaviateClientProcessor):
 
     def create_collection(
         self, persist_params: dict, omnipotent: bool = False
@@ -137,12 +115,9 @@ class WeaviatePersistor:
                            Defauts to False
         :return: the newly created collection
         """
-        params = self.base_persist_params.copy()
-        params.update(persist_params)
-
-        collection_name: Optional[str] = params.get("collection_name", None)
-        if collection_name is None:
-            raise ValueError("No collection name specified")
+        collection_name, _ = self.compile_collection_tenant_names(
+            persist_params.get("collection_name", None),
+        )
 
         with self.client_factory as client:
             if client.collections.exists(collection_name):
@@ -169,8 +144,8 @@ class WeaviatePersistor:
 
     def create_tenant(
         self,
-        collection_name: str,
-        tenant_name: str,
+        collection_name: Optional[str],
+        tenant_name: Optional[str],
         idempotent: bool = False,
     ) -> Collection:
         """
@@ -183,6 +158,13 @@ class WeaviatePersistor:
         :param idempotent: boolean indicating to accept creation of an already existing tenant.
                            Defaults to False
         """
+        collection_name, tenant_name = self.compile_collection_tenant_names(
+            collection_name,
+            tenant_name,
+        )
+        if tenant_name is None:
+            raise ValueError("Cannot create tenant with no tenant name")
+
         with self.client_factory as client:
             if not client.collections.exists(collection_name):
                 raise KeyError(f"Collection {collection_name} does not exist")
@@ -201,9 +183,10 @@ class WeaviatePersistor:
         return collection.collections.get(collection_name).with_tennant(tenant_name)
 
     def get_or_create(self, params: dict) -> Collection:
-        collection_name: Optional[str] = params.get("collection_name", None)
-        if collection_name is None:
-            raise ValueError("No collection name specified")
+        collection_name, tenant_name = self.compile_collection_tenant_names(
+            params["collection_name"],
+            params["tenant_name"],
+        )
 
         with self.client_factory as client:
             if not client.collections.exists(collection_name):
@@ -211,15 +194,13 @@ class WeaviatePersistor:
             else:
                 collection = client.collections.get(collection_name)
 
-        tenant_name: Optional[str] = params.get("tenant_name", None)
         if tenant_name is None:
             return collection
 
-        with self.client_factory as client:
-            if not collection.tenants.exists(tenant_name):
-                return self.create_tenant(collection_name, tenant_name)
-            else:
-                return collection.with_tennant(tenant_name)
+        if not collection.tenants.exists(tenant_name):
+            return self.create_tenant(collection_name, tenant_name)
+        else:
+            return collection.with_tennant(tenant_name)
 
     def persist_document(
         self,

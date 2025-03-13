@@ -1,21 +1,30 @@
-from abc import ABC, abstractmethod
 import json
+from abc import ABC, abstractmethod
 from hashlib import md5
 from typing import Any
 
+from genie_flow_invoker.genie import GenieInvoker
 from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
 
-from genie_flow_invoker.genie import GenieInvoker
-from genie_flow_invoker.invoker.weaviate.client import WeaviateClientFactory
-from genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest, \
-    WeaviatePersistenceRequest, WeaviatePersistenceResponse
-from genie_flow_invoker.invoker.weaviate.persist import WeaviatePersistor
-from genie_flow_invoker.invoker.weaviate.search import (
-    SimilaritySearcher,
-    AbstractSearcher,
-    VectorSimilaritySearcher,
+from .client import WeaviateClientFactory
+from .delete import WeaviateDeleter
+from .exceptions import (
+    InvalidFilterException,
+    NoMultiTenancySupportException,
+    TenantNotFoundException,
+    CollectionNotFoundException,
 )
+from .model import (
+    WeaviateDeleteChunksRequest,
+    WeaviateDeleteMessage,
+    WeaviatePersistenceRequest,
+    WeaviatePersistenceResponse,
+    WeaviateSimilaritySearchRequest,
+    WeaviateDeleteErrorResponse,
+)
+from .persist import WeaviatePersistor
+from .search import AbstractSearcher, SimilaritySearcher, VectorSimilaritySearcher
 
 
 class AbstractWeaviateInvoker(GenieInvoker, ABC):
@@ -179,7 +188,9 @@ class WeaviateSimilaritySearchRequestInvoker(ConfiguredWeaviateSimilaritySearchI
 
 class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker):
 
-    def __init__(self, client_factory: WeaviateClientFactory, persist_config: dict) -> None:
+    def __init__(
+        self, client_factory: WeaviateClientFactory, persist_config: dict
+    ) -> None:
         super().__init__(client_factory)
         self.persist_config = persist_config
         self.persistor = WeaviatePersistor(self.client_factory, self.persist_config)
@@ -247,10 +258,12 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
             )
             raise ValueError("invalid content '{content}'")
 
-        collection_name, tenant_name, nr_inserted, nr_replaced = self.persistor.persist_document(
-            request.document,
-            request.collection_name,
-            request.tenant_name,
+        collection_name, tenant_name, nr_inserted, nr_replaced = (
+            self.persistor.persist_document(
+                request.document,
+                request.collection_name,
+                request.tenant_name,
+            )
         )
 
         return WeaviatePersistenceResponse(
@@ -258,4 +271,103 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
             tenant_name=tenant_name,
             nr_inserts=nr_inserted,
             nr_replaces=nr_replaced,
+        ).model_dump_json()
+
+
+class AbstractWeaviateDeleteInvoker(AbstractWeaviateInvoker, ABC):
+
+    def __init__(
+        self, client_factory: WeaviateClientFactory, delete_config: dict
+    ) -> None:
+        super().__init__(client_factory)
+        self.delete_config = delete_config
+        self.deleter = WeaviateDeleter(self.client_factory, delete_config)
+
+    @classmethod
+    def from_config(cls, config: dict):
+        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        delete_config = config["delete"]
+        return cls.__init__(super_class.client_factory, delete_config)
+
+
+class WeaviateDeleteChunkInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteChunksRequest.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete Request")
+            raise ValueError("Failed to parse Weaviate Delete Request")
+
+        result = self.deleter.delete_chunks_by_id(
+            request.chunk_id,
+            request.collection_name,
+            request.tenant_name,
+        )
+        return json.dumps(result)
+
+
+class WeaviateDeleteByFilterInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            filter_definition = json.loads(content)
+        except json.decoder.JSONDecodeError:
+            logger.error("failed to parse filter definition")
+            raise ValueError("failed to parse filter definition")
+
+        try:
+            result = self.deleter.delete_by_filter(filter_definition)
+            return json.dumps(result)
+        except InvalidFilterException as e:
+            return WeaviateDeleteErrorResponse(
+                collection_name=e.collection_name,
+                tenant_name=e.tenant_name,
+                error_code=e.__name__,
+                error=str(e),
+            ).model_dump_json()
+
+
+class WeaviateDeleteTenantInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteMessage.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete Request")
+            raise ValueError("Failed to parse Weaviate Delete Request")
+
+        try:
+            result = self.deleter.delete_tenant(
+                request.collection_name, request.tenant_name
+            )
+        except ValueError as e:
+            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
+        except NoMultiTenancySupportException as e:
+            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
+        except TenantNotFoundException as e:
+            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
+
+        return WeaviateDeleteMessage(
+            collection_name=result["collection_name"],
+            tenant_name=result["tenant_name"],
+        ).model_dump_json()
+
+
+class WeaviateDeleteCollectionInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteMessage.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete Request")
+            raise ValueError("Failed to parse Weaviate Delete Request")
+
+        try:
+            result = self.deleter.delete_collection(request.collection_name)
+        except CollectionNotFoundException as e:
+            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
+
+        return WeaviateDeleteMessage(
+            collection_name=result["collection_name"]
         ).model_dump_json()

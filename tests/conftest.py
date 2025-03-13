@@ -97,6 +97,9 @@ class MockCollection:
     def aggregate(self):
         return MockAggregate(self.query_results)
 
+    def with_tenant(self, tenant_name):
+        return MockCollection(f"Tenant{self.name}", self.query_results)
+
 
 class MockAggregate:
 
