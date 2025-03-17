@@ -19,6 +19,15 @@ class Recorder:
         return self._return_value
 
 
+class MockConfig:
+
+    def get(self):
+        return self
+
+    @property
+    def multi_tenancy_config(self):
+        return True
+
 class MockQuery:
 
     def __init__(self, query_results: list[Object]):
@@ -117,6 +126,10 @@ class MockCollection:
     def aggregate(self):
         return MockAggregate(self.query_results)
 
+    @property
+    def config(self):
+        return MockConfig()
+
     def with_tenant(self, tenant_name):
         return MockCollection(f"{self.name} / {tenant_name}", self.query_results)
 
@@ -154,6 +167,15 @@ class MockCollections:
 
     def get(self, collection_name: str):
         return self.collections[collection_name]
+
+    def exists(self, some_name: str):
+        return True
+
+    def remove(self, _: list[str]):
+        ...
+
+    def delete(self, _: str):
+        ...
 
 class MockWeaviateClient:
 

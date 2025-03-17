@@ -83,7 +83,7 @@ def test_similarity_query_params_tenant(weaviate_client_factory):
     assert query_params["query"] == "my query"
     assert query_params["collection"].query_results == \
            weaviate_client_factory.collections_results["SimpleCollection"]
-    assert query_params["collection"].name == "TenantSimpleCollection"
+    assert query_params["collection"].name == "SimpleCollection / TenantSimpleCollection"
     assert query_params["target_vector"] == "default"
     assert query_params["include_vector"] == False
     assert query_params["method"] == "cosine"

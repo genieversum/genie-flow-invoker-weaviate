@@ -93,11 +93,15 @@ class WeaviateDeleter(WeaviateClientProcessor):
         collection_name: Optional[str] = None,
         tenant_name: Optional[str] = None,
     ) -> dict[str, Optional[str]]:
-        collection_name, tenant_name = self.get_collection_or_tenant(
+        collection_name, tenant_name = self.compile_collection_tenant_names(
             collection_name,
             tenant_name,
         )
-        if tenant_name is None:
+        if not collection_name:
+            logger.error("Trying to delete tenant but no collection name provided")
+            raise ValueError("Trying to delete tenant but no collection name provided")
+
+        if not tenant_name:
             logger.error("Trying to delete tenant but no tenant name provided")
             raise ValueError("Trying to delete tenant but no tenant name provided")
         with self.client_factory as client:
@@ -108,13 +112,13 @@ class WeaviateDeleter(WeaviateClientProcessor):
             raise NoMultiTenancySupportException(
                 collection_name=collection_name,
                 tenant_name=tenant_name,
-                message=f"This collection does not support multi-tenancy",
+                message="This collection does not support multi-tenancy",
             )
         if not collection.tenants.exists(tenant_name):
             raise TenantNotFoundException(
                 collection_name=collection_name,
                 tenant_name=tenant_name,
-                message=f"This tenant does not exist in this collection",
+                message="This tenant does not exist in this collection",
             )
         collection.tenants.remove([tenant_name])
         return {
