@@ -1,0 +1,144 @@
+import uuid
+
+from conftest import Recorder, MockCollectionData
+from genie_flow_invoker.invoker.weaviate import WeaviateDeleter, InvalidFilterException
+import pytest
+from weaviate.collections.classes.batch import DeleteManyReturn
+from weaviate.collections.classes.filters import Filter, _FilterAnd, _Operator, _FilterOr
+
+
+def test_delete_by_id(weaviate_client_factory, monkeypatch):
+    delete_return_value = DeleteManyReturn(
+        matches=128,
+        objects=[],
+        failed=64,
+        successful=64,
+    )
+    recorder = Recorder(delete_return_value)
+    monkeypatch.setattr(
+        MockCollectionData,
+        "delete_many",
+        recorder.record,
+    )
+
+    deleter = WeaviateDeleter(
+        weaviate_client_factory,
+        {"collection_name": "SimpleCollection"},
+    )
+
+    chunk_id = uuid.uuid3(uuid.NAMESPACE_OID, "first document")
+    deleter.delete_chunks_by_id(str(chunk_id))
+
+    assert len(recorder.recording) == 1
+    assert len(recorder.recording[0][0]) == 0
+    filter_kwargs = recorder.recording[0][1]
+    assert "where" in filter_kwargs.keys()
+    assert filter_kwargs["where"].operator == _Operator.CONTAINS_ANY
+    assert filter_kwargs["where"].value == [str(chunk_id)]
+    assert filter_kwargs["where"].target == "_id"
+
+
+def test_delete_by_filename(weaviate_client_factory, monkeypatch):
+    delete_return_value = DeleteManyReturn(
+        matches=128,
+        objects=[],
+        failed=64,
+        successful=64,
+    )
+    recorder = Recorder(delete_return_value)
+    monkeypatch.setattr(
+        MockCollectionData,
+        "delete_many",
+        recorder.record,
+    )
+
+    deleter = WeaviateDeleter(
+        weaviate_client_factory,
+        {"collection_name": "SimpleCollection"},
+    )
+
+    deleter.delete_chunks_by_filename("some-filename.txt")
+
+    assert len(recorder.recording) == 1
+    assert len(recorder.recording[0][0]) == 0
+    filter_kwargs = recorder.recording[0][1]
+    assert "where" in filter_kwargs.keys()
+    assert filter_kwargs["where"].operator == _Operator.EQUAL
+    assert filter_kwargs["where"].value == "some-filename.txt"
+    assert filter_kwargs["where"].target == "filename"
+
+
+def test_delete_by_filter(weaviate_client_factory, monkeypatch):
+    delete_return_value = DeleteManyReturn(
+        matches=128,
+        objects=[],
+        failed=64,
+        successful=64,
+    )
+    recorder = Recorder(delete_return_value)
+    monkeypatch.setattr(
+        MockCollectionData,
+        "delete_many",
+        recorder.record,
+    )
+
+    filter_specs = {
+        "having_all": {
+            "first_all": 123,
+            "second_all !=": 0,
+        }
+    }
+    deleter = WeaviateDeleter(
+        weaviate_client_factory,
+        {"collection_name": "SimpleCollection"},
+    )
+
+    deleter.delete_by_filter(filter_specs)
+
+    assert len(recorder.recording) == 1
+    assert len(recorder.recording[0][0]) == 0
+    filter_kwargs = recorder.recording[0][1]
+    assert "where" in filter_kwargs.keys()
+    all_filter = recorder.recording[0][1]["where"]
+    assert len(all_filter.filters) == 2
+    assert all_filter.filters[0].operator == _Operator.EQUAL
+    assert all_filter.filters[1].target == "second_all"
+
+
+def test_delete_failed_filter(weaviate_client_factory):
+    deleter = WeaviateDeleter(
+        weaviate_client_factory,
+        {"collection_name": "SimpleCollection"},
+    )
+
+    with pytest.raises(InvalidFilterException) as e:
+        deleter.delete_by_filter({})
+        assert e.collection_name == "SimpleCollection"
+        assert e.tenant_name is None
+        assert e.message == "Invalid or empty filter"
+
+
+def test_delete_result(weaviate_client_factory, monkeypatch):
+    delete_return_value = DeleteManyReturn(
+        matches=128,
+        objects=["some", "objects"],
+        failed=1,
+        successful=127,
+    )
+    recorder = Recorder(delete_return_value)
+    monkeypatch.setattr(
+        MockCollectionData,
+        "delete_many",
+        recorder.record,
+    )
+    deleter = WeaviateDeleter(
+        weaviate_client_factory,
+        {"collection_name": "SimpleCollection"},
+    )
+    deleter_result = deleter.delete_chunks_by_id(uuid.uuid4())
+    assert deleter_result["matches"] == 128
+    assert deleter_result["failed"] == 1
+    assert deleter_result["successful"] == 127
+    assert len(deleter_result.keys()) == 3
+
+def test_delete_tenant(weaviate_client_factory, monkeypatch):

@@ -17,8 +17,8 @@ def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
         property=key_name,
         value=value,
     )
-    filter_by_property = Filter.by_property(key_name)
-    match indicator:
+    filter_by_property = Filter.by_property(key_name.strip())
+    match indicator.strip():
         case "==":
             return filter_by_property.equal(value)
         case "!=":
@@ -47,7 +47,7 @@ def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
 def compile_filter(query_params: dict) -> Optional[Filter]:
     query_filter = None
 
-    if query_params["having_all"] is not None:
+    if query_params.get("having_all", None) is not None:
         logger.debug("building an `all_of' filter")
         query_filter = Filter.all_of(
             [
@@ -55,7 +55,7 @@ def compile_filter(query_params: dict) -> Optional[Filter]:
                 for key, value in query_params["having_all"].items()
             ]
         )
-    if query_params["having_any"] is not None:
+    if query_params.get("having_any", None) is not None:
         logger.debug("building an `any_of' filter")
         any_filter = Filter.any_of(
             [

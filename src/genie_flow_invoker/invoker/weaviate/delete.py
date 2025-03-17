@@ -1,4 +1,5 @@
 from typing import Optional
+import uuid
 
 from genie_flow_invoker.doc_proc import ChunkedDocument
 from loguru import logger
@@ -24,12 +25,16 @@ class WeaviateDeleter(WeaviateClientProcessor):
 
     def delete_chunks_by_id(
         self,
-        chunk_ids: str | list[str],
+        chunk_ids: str | list[str] | uuid.UUID | list[uuid.UUID],
         collection_name: Optional[str] = None,
         tenant_name: Optional[str] = None,
     ) -> dict[str, int]:
-        if isinstance(chunk_ids, str):
+        if not isinstance(chunk_ids, list):
             chunk_ids = [chunk_ids]
+        chunk_ids = [
+            uuid.UUID(s) if isinstance(s, str) else s
+            for s in chunk_ids
+        ]
         collection = self.get_collection_or_tenant(collection_name, tenant_name)
         return _compile_results(
             collection.data.delete_many(
@@ -46,7 +51,7 @@ class WeaviateDeleter(WeaviateClientProcessor):
         collection = self.get_collection_or_tenant(collection_name, tenant_name)
         return _compile_results(
             collection.data.delete_many(
-                where=Filter.by_property("filename").contains_any([filename])
+                where=Filter.by_property("filename").equal(filename)
             )
         )
 
@@ -70,7 +75,7 @@ class WeaviateDeleter(WeaviateClientProcessor):
     ) -> dict[str, int]:
         chunk_filter = compile_filter(by_filter)
         if chunk_filter is None:
-            collection_name, tenant_name = self.get_collection_or_tenant(
+            collection_name, tenant_name = self.compile_collection_tenant_names(
                 collection_name,
                 tenant_name,
             )
@@ -81,7 +86,7 @@ class WeaviateDeleter(WeaviateClientProcessor):
             )
 
         collection = self.get_collection_or_tenant(collection_name, tenant_name)
-        return _compile_results(collection.data.delete_many(where=filter))
+        return _compile_results(collection.data.delete_many(where=chunk_filter))
 
     def delete_tenant(
         self,

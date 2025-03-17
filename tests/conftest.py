@@ -1,10 +1,22 @@
 import uuid as uuidlib
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 
 from weaviate.collections.classes.internal import Object
+from weaviate.collections.classes.batch import DeleteManyReturn
 from pytest import fixture
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
+
+
+class Recorder:
+
+    def __init__(self, return_value: Any):
+        self.recording = []
+        self._return_value = return_value
+
+    def record(self, *args, **kwargs):
+        self.recording.append((args, dict(**kwargs)))
+        return self._return_value
 
 
 class MockQuery:
@@ -73,6 +85,14 @@ class MockCollectionData:
                 return True
         return False
 
+    def delete_many(self, **kwargs):
+        return DeleteManyReturn(
+            matches=len(self.query_results),
+            objects=self.query_results,
+            failed=0,
+            successful=len(self.query_results),
+        )
+
 
 class MockCollection:
 
@@ -98,7 +118,7 @@ class MockCollection:
         return MockAggregate(self.query_results)
 
     def with_tenant(self, tenant_name):
-        return MockCollection(f"Tenant{self.name}", self.query_results)
+        return MockCollection(f"{self.name} / {tenant_name}", self.query_results)
 
 
 class MockAggregate:
