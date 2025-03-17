@@ -13,7 +13,7 @@ from .exceptions import (
     CollectionNotFoundException,
     InvalidFilterException,
     NoMultiTenancySupportException,
-    TenantNotFoundException,
+    TenantNotFoundException, WeaviateDeleteException,
 )
 from .model import (
     WeaviateDeleteByFilenameRequest,
@@ -366,12 +366,13 @@ class WeaviateDeleteTenantInvoker(AbstractWeaviateDeleteInvoker):
             result = self.deleter.delete_tenant(
                 request.collection_name, request.tenant_name
             )
-        except ValueError as e:
-            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
-        except NoMultiTenancySupportException as e:
-            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
-        except TenantNotFoundException as e:
-            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json()
+        except WeaviateDeleteException as e:
+            return WeaviateDeleteErrorResponse(
+                collection_name=e.collection_name,
+                tenant_name=e.tenant_name,
+                error_code=e.__class__.__name__,
+                error=str(e),
+            ).model_dump_json()
 
         return WeaviateDeleteMessage(
             collection_name=result["collection_name"],

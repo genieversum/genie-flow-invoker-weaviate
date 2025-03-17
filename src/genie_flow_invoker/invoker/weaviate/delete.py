@@ -12,7 +12,7 @@ from .exceptions import (
     CollectionNotFoundException,
     InvalidFilterException,
     NoMultiTenancySupportException,
-    TenantNotFoundException,
+    TenantNotFoundException, NoCollectionProvided, NoTenantProvided,
 )
 from .utils import compile_filter
 
@@ -97,13 +97,14 @@ class WeaviateDeleter(WeaviateClientProcessor):
             collection_name,
             tenant_name,
         )
-        if not collection_name:
-            logger.error("Trying to delete tenant but no collection name provided")
-            raise ValueError("Trying to delete tenant but no collection name provided")
 
         if not tenant_name:
             logger.error("Trying to delete tenant but no tenant name provided")
-            raise ValueError("Trying to delete tenant but no tenant name provided")
+            raise NoTenantProvided(
+                collection_name=collection_name,
+                tenant_name=tenant_name,
+                message="Trying to delete tenant but no tenant name provided",
+            )
         with self.client_factory as client:
             collection = client.collections.get(collection_name)
 
@@ -140,6 +141,7 @@ class WeaviateDeleter(WeaviateClientProcessor):
             if not client.collections.exists(collection_name):
                 raise CollectionNotFoundException(
                     collection_name=collection_name,
+                    tenant_name=None,
                     message=f"This collection does not exist",
                 )
             client.collections.delete(collection_name)

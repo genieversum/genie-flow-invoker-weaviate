@@ -8,6 +8,8 @@ import pytest
 from weaviate.collections.classes.batch import DeleteManyReturn
 from weaviate.collections.classes.filters import Filter, _FilterAnd, _Operator, _FilterOr
 
+from genie_flow_invoker.invoker.weaviate.exceptions import NoTenantProvided, NoCollectionProvided
+
 
 def test_delete_by_id(weaviate_client_factory, monkeypatch):
     delete_return_value = DeleteManyReturn(
@@ -149,14 +151,14 @@ def test_delete_tenant_none(weaviate_client_factory, monkeypatch):
         weaviate_client_factory,
         {},
     )
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(NoTenantProvided) as e:
         deleter.delete_tenant("SimpleCollection", None)
         assert e.message == "Trying to delete tenant but no tenant name provided"
 
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(NoTenantProvided) as e:
         deleter.delete_tenant("SimpleCollection", "")
 
-    with pytest.raises(ValueError) as e:
+    with pytest.raises(NoCollectionProvided) as e:
         deleter.delete_tenant(None, None)
         assert e.message == "Trying to delete tenant but no collection name provided"
 

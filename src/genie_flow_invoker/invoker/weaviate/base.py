@@ -3,6 +3,8 @@ from typing import Any, NamedTuple, Optional, overload
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from weaviate.collections import Collection
 
+from genie_flow_invoker.invoker.weaviate.exceptions import NoCollectionProvided
+
 
 class CollectionTenant(NamedTuple):
     collection_name: Optional[str]
@@ -32,7 +34,11 @@ class WeaviateClientProcessor:
             tenant_name or self.base_params.tenant_name,
         )
         if result[0] is None:
-            raise ValueError("collection_name is required")
+            raise NoCollectionProvided(
+                collection_name=result[0],
+                tenant_name=result[1],
+                message="collection_name is required",
+            )
         return result
 
     @overload
