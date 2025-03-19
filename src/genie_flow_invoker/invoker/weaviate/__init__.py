@@ -30,31 +30,7 @@ class AbstractWeaviateInvoker(GenieInvoker, ABC):
         return cls(client_factory)
 
 
-class AbstractWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
-
-    def __init__(
-        self,
-        client_factory: WeaviateClientFactory,
-        query_config: dict[str, Any],
-    ) -> None:
-        super().__init__(client_factory)
-        self.query_config = query_config
-
-    @classmethod
-    def from_config(cls, config: dict):
-        """
-        Creates ab abstract Weaviate SimilaritySearchInvoker from configuration. Configuration
-        should include a key `connection` which contains all keys for setting up the connection.
-        Should also include the key `query` for all (default) query parameters.
-        """
-        super_class = super(AbstractWeaviateInvoker).from_config(config)
-        query_config = config["query"]
-        return cls(super_class.client_factory, query_config)
-
-
-class ConfiguredWeaviateSimilaritySearchInvoker(
-    AbstractWeaviateSimilaritySearchInvoker, ABC
-):
+class ConfiguredWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
 
     def __init__(
         self,
@@ -67,8 +43,20 @@ class ConfiguredWeaviateSimilaritySearchInvoker(
         This is the basic Weaviate similarity search invoker that reads search parameters` from
         the `meta.yaml` file that is used to create this invoker.
         """
-        super().__init__(client_factory, query_config)
+        self.client_factory = client_factory
+        self.query_config = query_config
         self.searcher = self.searcher_class(self.client_factory, self.query_config)
+
+    @classmethod
+    def from_config(cls, config: dict):
+        """
+        Creates ab abstract Weaviate SimilaritySearchInvoker from configuration. Configuration
+        should include a key `connection` which contains all keys for setting up the connection.
+        Should also include the key `query` for all (default) query parameters.
+        """
+        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        query_config = config["query"]
+        return cls(super_class.client_factory, query_config)
 
     @property
     @abstractmethod
