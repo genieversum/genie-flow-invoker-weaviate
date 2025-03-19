@@ -356,16 +356,16 @@ class AbstractSearcher(ABC):
 
         # bind the necessary arguments to the values in query_params
         search_function = self._conduct_search(collection)
-        sig = signature(search_function)
-        bound = sig.bind(**query_params)
+        function_signature = signature(search_function)
+        bound_function = function_signature.bind(**query_params)
 
         # conduct the search and apply the parent strategy
         logger.debug(
             "using search function {function_name} with parameters {parameters}",
             function_name=search_function.__name__,
-            parameters=bound.arguments.keys(),
+            parameters=bound_function.arguments.keys(),
         )
-        query_results = search_function(**bound.arguments)
+        query_results = search_function(**bound_function.arguments)
         query_results = self.apply_parent_strategy(query_results, **query_params)
 
         # compile the list of chunked documents and return it
