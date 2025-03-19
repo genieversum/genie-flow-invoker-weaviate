@@ -48,7 +48,6 @@ def test_request_search_invoke(weaviate_client_factory):
     )
     result_json = invoker.invoke(search_request.model_dump_json())
     result = [ChunkedDocument.model_validate(r) for r in json.loads(result_json)]
-    print(result)
     assert len(result) == 1
     assert len(result[0].chunks) == 1
     assert result[0].chunks[0].content == "Hello Parent"
