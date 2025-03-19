@@ -4,6 +4,7 @@ from genie_flow_invoker.invoker.weaviate import WeaviatePersistor
 def test_persist_same(weaviate_client_factory, chunked_document):
     params = {
         "collection_name": "SimpleCollection",
+        "idempotent": True,
     }
     persistor = WeaviatePersistor(weaviate_client_factory, params)
 

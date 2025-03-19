@@ -148,8 +148,18 @@ Persisting is done through the `ChunkedDocument` object. There exist one invoker
 called `WeaviatePersistInvoker` than expects a JSON version of a `WeaviatePersistenceRequest`
 object.
 
-A document chunk can be inserted or replaced. If there is already a chunk with the same `chunk_id`
-then that chunk will be replaced. Otherwise it will be inserted.
+### Configuration
+Configuration of the invoker is done through the `meta.yaml` file. Two keys required:
+
+`connection`
+: [see above](#connection-settings)
+
+`persist`
+: can contain the `collection_name` and potentially a `tenant_name` that serve as the based for 
+the collection and tenant that the invoker refers to. Is overridden when the persist requests
+also gives them. 
+Also contains a flag `idempotent`, that indicates if inserting a chunk with the same id should
+just overwrite that chunk or fail with an exception. Defaults to `False`.
 
 ### Weaviate Persistence Request
 This object should contain:

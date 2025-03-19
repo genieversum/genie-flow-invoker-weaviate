@@ -109,6 +109,7 @@ class WeaviatePersistor:
         self.base_persist_params = dict(
             collection_name=persist_params.get("collection_name", None),
             tenant_name=persist_params.get("tenant_name", None),
+            idempotent=persist_params.get("idempotent", False),
         )
 
     def compile_collection_tenant_names(
@@ -171,7 +172,6 @@ class WeaviatePersistor:
         self,
         collection_name: str,
         tenant_name: str,
-        idempotent: bool = False,
     ) -> Collection:
         """
         Create a new tenant for a collection with a given name. If a tenant already exists,
@@ -180,8 +180,6 @@ class WeaviatePersistor:
 
         :param collection_name: name of the collection to add to
         :param tenant_name: the name of the tenant to add
-        :param idempotent: boolean indicating to accept creation of an already existing tenant.
-                           Defaults to False
         """
         with self.client_factory as client:
             if not client.collections.exists(collection_name):
@@ -189,7 +187,7 @@ class WeaviatePersistor:
 
             collection = client.collections.get(collection_name)
             if collection.tenants.exists(tenant_name):
-                if idempotent:
+                if self.base_persist_params["idempotent"]:
                     logger.warning(
                         "Skipping creation of tenant '{tenant_name}' that already exists.",
                         tenant_name=tenant_name,
@@ -314,8 +312,16 @@ class WeaviatePersistor:
                     )
                     nr_inserted += 1
                 else:
+                    if not self.base_persist_params["idempotent"]:
+                        logger.error(
+                            "refusing to insert duplicate chunk with id {chunk_id}",
+                            chunk_id=chunk.chunk_id,
+                        )
+                        raise ValueError(f"duplicate chunk with id {chunk.chunk_id}")
+
                     logger.debug(
-                        "replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id
+                        "idempotent, so replacing chunk with id {chunk_id}",
+                        chunk_id=chunk.chunk_id,
                     )
                     collection.data.replace(
                         uuid=chunk.chunk_id,
