@@ -1,6 +1,11 @@
 from genie_flow_invoker.invoker.weaviate.utils import compile_filter
-from weaviate.collections.classes.filters import Filter, _FilterAnd, _Operator, _FilterOr, \
-    _FilterValue
+from weaviate.collections.classes.filters import (
+    Filter,
+    _FilterAnd,
+    _Operator,
+    _FilterOr,
+    _FilterValue,
+)
 
 
 def test_filter_none():
@@ -104,11 +109,7 @@ def test_filter_all_any():
 
 
 def test_filter_space_separator():
-    filter_definition = {
-        "having_all": {
-            "a space separated   attribute   !=": 0
-        }
-    }
+    filter_definition = {"having_all": {"a space separated   attribute   !=": 0}}
     weaviate_filter = compile_filter(filter_definition)
 
     assert weaviate_filter is not None

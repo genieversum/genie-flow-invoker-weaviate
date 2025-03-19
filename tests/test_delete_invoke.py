@@ -1,11 +1,21 @@
 import json
 import uuid
 
-from genie_flow_invoker.invoker.weaviate import WeaviateDeleteChunkInvoker, WeaviateDeleter, \
-    WeaviateDeleteChunksRequest, WeaviateDeleteByFilenameInvoker, WeaviateDeleteByFilenameRequest, \
-    WeaviateDeleteByFilterInvoker, WeaviateDeleteByFilterRequest, WeaviateDeleteTenantInvoker, \
-    WeaviateDeleteMessage, WeaviateDeleteErrorResponse, TenantNotFoundException, \
-    CollectionNotFoundException, WeaviateDeleteCollectionInvoker
+from genie_flow_invoker.invoker.weaviate import (
+    WeaviateDeleteChunkInvoker,
+    WeaviateDeleter,
+    WeaviateDeleteChunksRequest,
+    WeaviateDeleteByFilenameInvoker,
+    WeaviateDeleteByFilenameRequest,
+    WeaviateDeleteByFilterInvoker,
+    WeaviateDeleteByFilterRequest,
+    WeaviateDeleteTenantInvoker,
+    WeaviateDeleteMessage,
+    WeaviateDeleteErrorResponse,
+    TenantNotFoundException,
+    CollectionNotFoundException,
+    WeaviateDeleteCollectionInvoker,
+)
 import pytest
 
 from genie_flow_invoker.invoker.weaviate.exceptions import NoTenantProvided
@@ -20,7 +30,9 @@ def delete_return_result():
     }
 
 
-def test_invoke_delete_chunk(weaviate_client_factory, delete_return_result, monkeypatch):
+def test_invoke_delete_chunk(
+    weaviate_client_factory, delete_return_result, monkeypatch
+):
     monkeypatch.setattr(
         WeaviateDeleter,
         "delete_chunks_by_id",
@@ -38,7 +50,9 @@ def test_invoke_delete_chunk(weaviate_client_factory, delete_return_result, monk
     assert result["successful"] == 122
 
 
-def test_invoke_delete_by_filename(weaviate_client_factory, delete_return_result, monkeypatch):
+def test_invoke_delete_by_filename(
+    weaviate_client_factory, delete_return_result, monkeypatch
+):
     monkeypatch.setattr(
         WeaviateDeleter,
         "delete_chunks_by_filename",
@@ -56,7 +70,9 @@ def test_invoke_delete_by_filename(weaviate_client_factory, delete_return_result
     assert result["successful"] == 122
 
 
-def test_invoker_delete_by_filter(weaviate_client_factory, delete_return_result, monkeypatch):
+def test_invoker_delete_by_filter(
+    weaviate_client_factory, delete_return_result, monkeypatch
+):
     monkeypatch.setattr(
         WeaviateDeleter,
         "delete_by_filter",
@@ -70,7 +86,7 @@ def test_invoker_delete_by_filter(weaviate_client_factory, delete_return_result,
         },
         having_all={
             "another-attr": "aap",
-        }
+        },
     )
     result_json = invoker.invoke(delete_request.model_dump_json())
     result = json.loads(result_json)
@@ -79,7 +95,9 @@ def test_invoker_delete_by_filter(weaviate_client_factory, delete_return_result,
     assert result["successful"] == 122
 
 
-def test_invoke_delete_tenant_no_name(weaviate_client_factory, delete_return_result, monkeypatch):
+def test_invoke_delete_tenant_no_name(
+    weaviate_client_factory, delete_return_result, monkeypatch
+):
     class MockExceptionRaiser:
         def __init__(self, *args, **kwargs):
             raise NoTenantProvided(
@@ -107,7 +125,9 @@ def test_invoke_delete_tenant_no_name(weaviate_client_factory, delete_return_res
     assert result.error == "Some Error description"
 
 
-def test_invoke_delete_tenant_not_found(weaviate_client_factory, delete_return_result, monkeypatch):
+def test_invoke_delete_tenant_not_found(
+    weaviate_client_factory, delete_return_result, monkeypatch
+):
     class MockExceptionRaiser:
         def __init__(self, *args, **kwargs):
             raise TenantNotFoundException(

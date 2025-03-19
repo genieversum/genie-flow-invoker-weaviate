@@ -1,14 +1,33 @@
 import uuid
 from collections import namedtuple
 
-from conftest import Recorder, MockCollectionData, MockConfig, MockCollection, MockCollections
-from genie_flow_invoker.invoker.weaviate import WeaviateDeleter, InvalidFilterException, \
-    NoMultiTenancySupportException, TenantNotFoundException, CollectionNotFoundException
+from conftest import (
+    Recorder,
+    MockCollectionData,
+    MockConfig,
+    MockCollection,
+    MockCollections,
+)
+from genie_flow_invoker.invoker.weaviate import (
+    WeaviateDeleter,
+    InvalidFilterException,
+    NoMultiTenancySupportException,
+    TenantNotFoundException,
+    CollectionNotFoundException,
+)
 import pytest
 from weaviate.collections.classes.batch import DeleteManyReturn
-from weaviate.collections.classes.filters import Filter, _FilterAnd, _Operator, _FilterOr
+from weaviate.collections.classes.filters import (
+    Filter,
+    _FilterAnd,
+    _Operator,
+    _FilterOr,
+)
 
-from genie_flow_invoker.invoker.weaviate.exceptions import NoTenantProvided, NoCollectionProvided
+from genie_flow_invoker.invoker.weaviate.exceptions import (
+    NoTenantProvided,
+    NoCollectionProvided,
+)
 
 
 def test_delete_by_id(weaviate_client_factory, monkeypatch):

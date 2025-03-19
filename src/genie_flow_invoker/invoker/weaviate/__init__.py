@@ -13,7 +13,8 @@ from .exceptions import (
     CollectionNotFoundException,
     InvalidFilterException,
     NoMultiTenancySupportException,
-    TenantNotFoundException, WeaviateDeleteException,
+    TenantNotFoundException,
+    WeaviateDeleteException,
 )
 from .model import (
     WeaviateDeleteByFilenameRequest,
@@ -41,7 +42,7 @@ class AbstractWeaviateInvoker(GenieInvoker, ABC):
         return cls(client_factory)
 
 
-class AbstractWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
+class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
 
     def __init__(
         self,
@@ -49,7 +50,15 @@ class AbstractWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
         query_config: dict[str, Any],
     ) -> None:
         super().__init__(client_factory)
+        """
+        A Genie Invoker to retrieve documents from Weaviate, using similarity search.
+
+        This is the basic Weaviate similarity search invoker that reads search parameters` from
+        the `meta.yaml` file that is used to create this invoker.
+        """
+        self.client_factory = client_factory
         self.query_config = query_config
+        self.searcher = self.searcher_class(self.client_factory, self.query_config)
 
     @classmethod
     def from_config(cls, config: dict):
@@ -61,25 +70,6 @@ class AbstractWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
         super_class = super(AbstractWeaviateInvoker).from_config(config)
         query_config = config["query"]
         return cls(super_class.client_factory, query_config)
-
-
-class ConfiguredWeaviateSimilaritySearchInvoker(
-    AbstractWeaviateSimilaritySearchInvoker, ABC
-):
-
-    def __init__(
-        self,
-        client_factory: WeaviateClientFactory,
-        query_config: dict[str, Any],
-    ) -> None:
-        """
-        A Genie Invoker to retrieve documents from Weaviate, using similarity search.
-
-        This is the basic Weaviate similarity search invoker that reads search parameters` from
-        the `meta.yaml` file that is used to create this invoker.
-        """
-        super().__init__(client_factory, query_config)
-        self.searcher = self.searcher_class(self.client_factory, self.query_config)
 
     @property
     @abstractmethod

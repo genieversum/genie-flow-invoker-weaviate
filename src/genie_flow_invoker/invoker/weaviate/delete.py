@@ -12,7 +12,9 @@ from .exceptions import (
     CollectionNotFoundException,
     InvalidFilterException,
     NoMultiTenancySupportException,
-    TenantNotFoundException, NoCollectionProvided, NoTenantProvided,
+    TenantNotFoundException,
+    NoCollectionProvided,
+    NoTenantProvided,
 )
 from .utils import compile_filter
 
@@ -31,10 +33,7 @@ class WeaviateDeleter(WeaviateClientProcessor):
     ) -> dict[str, int]:
         if not isinstance(chunk_ids, list):
             chunk_ids = [chunk_ids]
-        chunk_ids = [
-            uuid.UUID(s) if isinstance(s, str) else s
-            for s in chunk_ids
-        ]
+        chunk_ids = [uuid.UUID(s) if isinstance(s, str) else s for s in chunk_ids]
         collection = self.get_collection_or_tenant(collection_name, tenant_name)
         return _compile_results(
             collection.data.delete_many(

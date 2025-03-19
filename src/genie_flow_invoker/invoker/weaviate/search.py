@@ -166,6 +166,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         for genie_param, weaviate_param in translations.items():
             if genie_param in query_params:
                 query_params[weaviate_param] = query_params[genie_param]
+                del query_params[genie_param]
 
         # if a non-default vector is specified, set the target to it
         query_params["target_vector"] = (
@@ -220,9 +221,9 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         :param kwargs: additional keyword arguments that were passed to the search function
         :return: a list of objects with the parent strategy applied
         """
-        parent_strategy = self.base_query_params.get("parent_strategy", None)
-        if "parent_strategy" in kwargs:
-            parent_strategy = kwargs["parent_strategy"]
+        parent_strategy = kwargs.get(
+            "parent_strategy", None
+        ) or self.base_query_params.get("parent_strategy", None)
         if parent_strategy is None:
             logger.debug("no parent strategy set")
             return query_results
@@ -292,16 +293,16 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
 
         # bind the necessary arguments to the values in query_params
         search_function = self._conduct_search(collection)
-        sig = signature(search_function)
-        bound = sig.bind(**query_params)
+        function_signature = signature(search_function)
+        bound_function = function_signature.bind(**query_params)
 
         # conduct the search and apply the parent strategy
         logger.debug(
             "using search function {function_name} with parameters {parameters}",
             function_name=search_function.__name__,
-            parameters=bound.arguments.keys(),
+            parameters=bound_function.arguments.keys(),
         )
-        query_results = search_function(**bound.arguments)
+        query_results = search_function(**bound_function.arguments)
         query_results = self.apply_parent_strategy(query_results, **query_params)
 
         # compile the list of chunked documents and return it

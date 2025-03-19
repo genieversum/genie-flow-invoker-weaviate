@@ -2,9 +2,12 @@ import json
 import uuid
 
 from genie_flow_invoker.doc_proc import ChunkedDocument
-from genie_flow_invoker.invoker.weaviate import WeaviateSimilaritySearchInvoker, \
-    WeaviateVectorSimilaritySearchInvoker, WeaviateSimilaritySearchRequest, \
-    WeaviateSimilaritySearchRequestInvoker
+from genie_flow_invoker.invoker.weaviate import (
+    WeaviateSimilaritySearchInvoker,
+    WeaviateVectorSimilaritySearchInvoker,
+    WeaviateSimilaritySearchRequest,
+    WeaviateSimilaritySearchRequestInvoker,
+)
 
 
 def test_search_invoke(weaviate_client_factory):
@@ -12,7 +15,7 @@ def test_search_invoke(weaviate_client_factory):
         weaviate_client_factory,
         dict(
             collection_name="SimpleCollection",
-        )
+        ),
     )
     result_json = invoker.invoke("who killed Bambi")
     result = [ChunkedDocument.model_validate(r) for r in json.loads(result_json)]
@@ -30,10 +33,7 @@ def test_search_invoke(weaviate_client_factory):
 
 
 def test_request_search_invoke(weaviate_client_factory):
-    invoker = WeaviateSimilaritySearchRequestInvoker(
-        weaviate_client_factory,
-        dict()
-    )
+    invoker = WeaviateSimilaritySearchRequestInvoker(weaviate_client_factory, dict())
     search_request = WeaviateSimilaritySearchRequest(
         filename="some_file.txt",
         collection_name="SimpleCollection",
@@ -44,8 +44,10 @@ def test_request_search_invoke(weaviate_client_factory):
         top=16,
         auto_limit=2,
         operation_level=-1,
-        query_embedding=[2.27]*12,
+        query_embedding=[2.27] * 12,
     )
     result_json = invoker.invoke(search_request.model_dump_json())
     result = [ChunkedDocument.model_validate(r) for r in json.loads(result_json)]
-    print(result)
+    assert len(result) == 1
+    assert len(result[0].chunks) == 1
+    assert result[0].chunks[0].content == "Hello Parent"
