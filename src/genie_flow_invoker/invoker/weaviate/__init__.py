@@ -16,15 +16,22 @@ from genie_flow_invoker.invoker.weaviate.search import (
 )
 
 
-class AbstractWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
+class ConfiguredWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
 
     def __init__(
         self,
         client_factory: WeaviateClientFactory,
         query_config: dict[str, Any],
     ) -> None:
+        """
+        A Genie Invoker to retrieve documents from Weaviate, using similarity search.
+
+        This is the basic Weaviate similarity search invoker that reads search parameters` from
+        the `meta.yaml` file that is used to create this invoker.
+        """
         self.client_factory = client_factory
         self.query_config = query_config
+        self.searcher = self.searcher_class(self.client_factory, self.query_config)
 
     @classmethod
     def from_config(cls, config: dict):
@@ -38,25 +45,6 @@ class AbstractWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
 
         query_config = config["query"]
         return cls(client_factory, query_config)
-
-
-class ConfiguredWeaviateSimilaritySearchInvoker(
-    AbstractWeaviateSimilaritySearchInvoker, ABC
-):
-
-    def __init__(
-        self,
-        client_factory: WeaviateClientFactory,
-        query_config: dict[str, Any],
-    ) -> None:
-        """
-        A Genie Invoker to retrieve documents from Weaviate, using similarity search.
-
-        This is the basic Weaviate similarity search invoker that reads search parameters` from
-        the `meta.yaml` file that is used to create this invoker.
-        """
-        super().__init__(client_factory, query_config)
-        self.searcher = self.searcher_class(self.client_factory, self.query_config)
 
     @property
     @abstractmethod
