@@ -289,9 +289,7 @@ class AbstractSearcher(ABC):
         :param kwargs: additional keyword arguments that were passed to the search function
         :return: a list of objects with the parent strategy applied
         """
-        parent_strategy = self.base_query_params.get("parent_strategy", None)
-        if "parent_strategy" in kwargs:
-            parent_strategy = kwargs["parent_strategy"]
+        parent_strategy = kwargs.get("parent_strategy", None) or self.base_query_params.get("parent_strategy", None)
         if parent_strategy is None:
             logger.debug("no parent strategy set")
             return query_results
