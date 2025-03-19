@@ -6,3 +6,5 @@ main.log
 dist/
 build/
 genie_flow_invoker_weaviate.egg-info/
+docker-compose.yaml
+.env
