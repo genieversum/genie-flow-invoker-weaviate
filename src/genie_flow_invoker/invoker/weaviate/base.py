@@ -1,9 +1,9 @@
 from typing import Any, NamedTuple, Optional, overload
 
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
-from weaviate.collections import Collection
-
 from genie_flow_invoker.invoker.weaviate.exceptions import NoCollectionProvided
+from loguru import logger
+from weaviate.collections import Collection
 
 
 class CollectionTenant(NamedTuple):
@@ -71,7 +71,22 @@ class WeaviateClientProcessor:
         )
         with self.client_factory as client:
             collection = client.collections.get(collection_name)
+            if not collection.exists():
+                logger.error(
+                    "Collection {collection_name} does not exist",
+                    collection_name=collection_name,
+                )
+                raise ValueError(f"Collection {collection_name} does not exist")
 
         if tenant_name is None:
             return collection
+
+        if not collection.tenants.exists(tenant_name):
+            logger.error(
+                "Tenant {tenant_name} does not exist in collection {collection_name}",
+                tenant_name=tenant_name,
+                collection_name=collection_name,
+            )
+            raise ValueError(f"Tenant {tenant_name} does not exist in collection {collection_name}")
+
         return collection.with_tenant(tenant_name)

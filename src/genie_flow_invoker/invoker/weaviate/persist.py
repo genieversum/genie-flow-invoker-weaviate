@@ -5,7 +5,12 @@ from genie_flow_invoker.doc_proc import ChunkedDocument
 from loguru import logger
 
 from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
-from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
+from weaviate.classes.config import (
+    Configure,
+    DataType,
+    Property,
+    ReferenceProperty,
+)
 from weaviate.collections import Collection
 
 
@@ -137,9 +142,9 @@ class WeaviatePersistor(WeaviateClientProcessor):
 
             return client.collections.create(
                 name=collection_name,
-                properties=_compile_properties(params),
-                multi_tenancy_config=_compile_multi_tenancy(params),
-                references=_compile_cross_references(params),
+                properties=_compile_properties(persist_params),
+                multi_tenancy_config=_compile_multi_tenancy(persist_params),
+                references=_compile_cross_references(persist_params),
             )
 
     def create_tenant(
