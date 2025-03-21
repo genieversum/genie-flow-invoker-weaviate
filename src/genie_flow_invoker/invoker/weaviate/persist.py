@@ -241,6 +241,13 @@ class WeaviatePersistor(WeaviateClientProcessor):
             )
             collection = client.collections.get(collection_name)
 
+        if not collection.exists():
+            logger.error(
+                "collection '{collection_name}' does not exist.",
+                collection_name=collection_name,
+            )
+            raise KeyError(f"Collection {collection_name} does not exist")
+
         if tenant_name is not None:
             if not collection.tenants.exists(tenant_name):
                 logger.error(

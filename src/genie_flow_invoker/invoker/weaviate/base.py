@@ -76,7 +76,7 @@ class WeaviateClientProcessor:
                     "Collection {collection_name} does not exist",
                     collection_name=collection_name,
                 )
-                raise ValueError(f"Collection {collection_name} does not exist")
+                raise KeyError(f"Collection {collection_name} does not exist")
 
         if tenant_name is None:
             return collection
@@ -87,6 +87,6 @@ class WeaviateClientProcessor:
                 tenant_name=tenant_name,
                 collection_name=collection_name,
             )
-            raise ValueError(f"Tenant {tenant_name} does not exist in collection {collection_name}")
+            raise KeyError(f"Tenant {tenant_name} does not exist in collection {collection_name}")
 
         return collection.with_tenant(tenant_name)
