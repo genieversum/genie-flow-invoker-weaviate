@@ -133,6 +133,9 @@ class MockCollection:
     def config(self):
         return MockConfig()
 
+    def exists(self):
+        return True
+
     def with_tenant(self, tenant_name):
         return MockCollection(f"{self.name} / {tenant_name}", self.query_results)
 
