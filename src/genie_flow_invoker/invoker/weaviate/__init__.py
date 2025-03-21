@@ -36,10 +36,9 @@ class AbstractWeaviateInvoker(GenieInvoker, ABC):
         self.client_factory = client_factory
 
     @classmethod
-    def from_config(cls, config: dict):
+    def create_client_factory(cls, config: dict):
         connection_config = config["connection"]
-        client_factory = WeaviateClientFactory(connection_config)
-        return cls(client_factory)
+        return WeaviateClientFactory(connection_config)
 
 
 class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
@@ -67,9 +66,9 @@ class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
         should include a key `connection` which contains all keys for setting up the connection.
         Should also include the key `query` for all (default) query parameters.
         """
-        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        client_factory = cls.create_client_factory(config)
         query_config = config["query"]
-        return cls(super_class.client_factory, query_config)
+        return cls(client_factory, query_config)
 
     @property
     @abstractmethod
@@ -189,9 +188,9 @@ class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker):
 
     @classmethod
     def from_config(cls, config: dict):
-        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        client_factory = cls.create_client_factory(config)
         persist_config = config["persist"]
-        return cls.__init__(super_class.client_factory, persist_config)
+        return cls(client_factory, persist_config)
 
 
 class WeaviateCreateCollectionInvoker(AbstractWeaviatePersistorInvoker):
@@ -277,7 +276,7 @@ class AbstractWeaviateDeleteInvoker(AbstractWeaviateInvoker, ABC):
 
     @classmethod
     def from_config(cls, config: dict):
-        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        client_factory = cls.create_client_factory(config)
         delete_config = config["delete"]
         return cls.__init__(super_class.client_factory, delete_config)
 
