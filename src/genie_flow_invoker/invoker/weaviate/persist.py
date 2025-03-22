@@ -1,5 +1,6 @@
+import re
 from collections import defaultdict
-from typing import Optional
+from typing import Optional, Any
 
 from genie_flow_invoker.doc_proc import ChunkedDocument
 from loguru import logger
@@ -103,6 +104,34 @@ def _compile_cross_references(params: dict):
             target_collection=collection_name,
         )
     ]
+
+
+_METADATA_FIRST_CHAR = re.compile("[_A-Za-z]")
+_METADATA_REMAINING_CHARS = re.compile("[_0-9A-Za-z]")
+def _clean_metadata_key(key: str) -> str:
+    if len(key) == 0:
+        logger.error("Metadata contains empty key")
+        raise ValueError("Metadata contains empty key")
+
+    result = key[0] if _METADATA_FIRST_CHAR.match(key[0]) else "_"
+    for c in key[1:]:
+        result += c if _METADATA_REMAINING_CHARS.match(c) else "_"
+    return result
+
+
+def clean_nested_metadata_properties(metadata: Any) -> Any:
+    if isinstance(metadata, dict):
+        return {
+            _clean_metadata_key(k): clean_nested_metadata_properties(v)
+            for k, v in metadata.items()
+        }
+    if isinstance(metadata, list):
+        return [clean_nested_metadata_properties(e) for e in metadata]
+    if isinstance(metadata, tuple):
+        return (clean_nested_metadata_properties(e) for e in metadata)
+    if isinstance(metadata, set):
+        return {clean_nested_metadata_properties(e) for e in metadata}
+    return metadata
 
 
 class WeaviatePersistor(WeaviateClientProcessor):
@@ -291,7 +320,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
                     "original_span_start": chunk.original_span[0],
                     "original_span_end": chunk.original_span[1],
                     "hierarchy_level": chunk.hierarchy_level,
-                    "document_metadata": document.document_metadata,
+                    "document_metadata": clean_nested_metadata_properties(document.document_metadata),
                 }
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
 
