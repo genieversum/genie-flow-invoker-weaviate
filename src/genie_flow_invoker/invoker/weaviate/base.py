@@ -42,6 +42,32 @@ class WeaviateClientProcessor:
         return result
 
     @overload
+    def get_collection(self, collection_name: str) -> Collection: ...
+
+    @overload
+    def get_collection(self, params: dict[str, Any]) -> Collection: ...
+
+    def get_collection(self, collection_name_or_params: Optional[str | dict[str, Any]]) -> Collection:
+        if isinstance(collection_name_or_params, dict):
+            collection_name = collection_name_or_params.get("collection_name", None)
+        else:
+            collection_name = collection_name_or_params
+
+        collection_name = collection_name or self.base_params.collection_name
+        if collection_name is None:
+            raise NoCollectionProvided(
+                message="Collection name is required",
+                collection_name="",
+                tenant_name=None,
+            )
+
+        with self.client_factory as client:
+            if not client.collections.exists(collection_name):
+                raise KeyError(f"Collection {collection_name} does not exist")
+            return client.collections.get(collection_name)
+
+
+    @overload
     def get_collection_or_tenant(
         self,
         params: dict[str, Any],
@@ -59,25 +85,9 @@ class WeaviateClientProcessor:
         collection_name_or_params: Optional[str | dict[str, Any]] = None,
         tenant_name: Optional[str] = None,
     ) -> Collection:
-        if isinstance(collection_name_or_params, dict):
-            collection_name = collection_name_or_params.get("collection_name", None)
-            tenant_name = collection_name_or_params.get("tenant_name", None)
-        else:
-            collection_name = collection_name_or_params
+        collection = self.get_collection(collection_name_or_params)
 
-        collection_name, tenant_name = self.compile_collection_tenant_names(
-            collection_name,
-            tenant_name,
-        )
-        with self.client_factory as client:
-            collection = client.collections.get(collection_name)
-            if not collection.exists():
-                logger.error(
-                    "Collection {collection_name} does not exist",
-                    collection_name=collection_name,
-                )
-                raise KeyError(f"Collection {collection_name} does not exist")
-
+        tenant_name = tenant_name or self.base_params.tenant_name
         if tenant_name is None:
             return collection
 
@@ -85,8 +95,8 @@ class WeaviateClientProcessor:
             logger.error(
                 "Tenant {tenant_name} does not exist in collection {collection_name}",
                 tenant_name=tenant_name,
-                collection_name=collection_name,
+                collection_name=collection.name,
             )
-            raise KeyError(f"Tenant {tenant_name} does not exist in collection {collection_name}")
+            raise KeyError(f"Tenant {tenant_name} does not exist in collection {collection.name}")
 
         return collection.with_tenant(tenant_name)

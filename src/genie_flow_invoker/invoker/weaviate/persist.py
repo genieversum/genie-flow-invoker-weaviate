@@ -4,6 +4,7 @@ from typing import Optional, Any
 
 from genie_flow_invoker.doc_proc import ChunkedDocument
 from loguru import logger
+from weaviate.exceptions import UnexpectedStatusCodeError
 
 from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
 from weaviate.classes.config import (
@@ -137,16 +138,15 @@ def clean_nested_metadata_properties(metadata: Any) -> Any:
 class WeaviatePersistor(WeaviateClientProcessor):
 
     def create_collection(
-        self, persist_params: dict, omnipotent: bool = False
+        self,
+        persist_params: dict,
     ) -> Collection:
         """
         Create a new collection with the given name and the configuration that is compiled from
         the given persist_params. Raises a ValueError when a collection with that name
-        already exists - unless omnipotent is set to True.
+        already exists.
 
         :param persist_params: the configuration parameters to create the collection with
-        :param omnipotent: a boolean indicating to ignore creating already existing collections.
-                           Defauts to False
         :return: the newly created collection
         """
         collection_name, _ = self.compile_collection_tenant_names(
@@ -154,87 +154,40 @@ class WeaviatePersistor(WeaviateClientProcessor):
         )
 
         with self.client_factory as client:
-            if client.collections.exists(collection_name):
-                if omnipotent:
-                    logger.warning(
-                        "Skipping creation of collection '{collection_name}' that already exists.",
-                        collection_name=collection_name,
-                    )
-                    return client.collections.get(collection_name)
-
-                logger.error(
-                    "Cannot create collection with name '{collection_name}' "
-                    "because it already exists.",
-                    collection_name=collection_name,
+            try:
+                return client.collections.create(
+                    name=collection_name,
+                    properties=_compile_properties(persist_params),
+                    multi_tenancy_config=_compile_multi_tenancy(persist_params),
+                    references=_compile_cross_references(persist_params),
                 )
-                raise ValueError("Collection {collection_name} already exists")
-
-            return client.collections.create(
-                name=collection_name,
-                properties=_compile_properties(persist_params),
-                multi_tenancy_config=_compile_multi_tenancy(persist_params),
-                references=_compile_cross_references(persist_params),
-            )
+            except UnexpectedStatusCodeError as e:
+                logger.error(
+                    "Failed to create collection '{collection_name}', error={error}",
+                    collection_name=collection_name,
+                    error=str(e),
+                )
+                raise ValueError("Failed to create collection") from e
 
     def create_tenant(
         self,
-        collection_name: Optional[str],
+        collection: Collection,
         tenant_name: Optional[str],
-        idempotent: bool = False,
     ) -> Collection:
         """
         Create a new tenant for a collection with a given name. If a tenant already exists,
-        with the given tenant name, a ValueError is raised - unless idempotent is set to True
-        in which case the creation is silently ignored.
+        with the given tenant name, a ValueError is raised.
 
-        :param collection_name: name of the collection to add to
+        :param collection: the Collection to create the tenant in
         :param tenant_name: the name of the tenant to add
-        :param idempotent: boolean indicating to accept creation of an already existing tenant.
-                           Defaults to False
         """
-        collection_name, tenant_name = self.compile_collection_tenant_names(
-            collection_name,
-            tenant_name,
-        )
+        tenant_name = tenant_name or self.base_params.tenant_name
         if tenant_name is None:
+            logger.error("Cannot create tenant without a tenant name")
             raise ValueError("Cannot create tenant with no tenant name")
 
-        with self.client_factory as client:
-            if not client.collections.exists(collection_name):
-                raise KeyError(f"Collection {collection_name} does not exist")
-
-            collection = client.collections.get(collection_name)
-            if collection.tenants.exists(tenant_name):
-                if idempotent:
-                    logger.warning(
-                        "Skipping creation of tenant '{tenant_name}' that already exists.",
-                        tenant_name=tenant_name,
-                    )
-                    return collection.with_tenant(tenant_name)
-                raise ValueError(f"Tenant {tenant_name} already exists")
-
         collection.tenants.create([tenant_name])
-        return collection.collections.get(collection_name).with_tennant(tenant_name)
-
-    def get_or_create(self, params: dict) -> Collection:
-        collection_name, tenant_name = self.compile_collection_tenant_names(
-            params["collection_name"],
-            params["tenant_name"],
-        )
-
-        with self.client_factory as client:
-            if not client.collections.exists(collection_name):
-                collection = self.create_collection(params)
-            else:
-                collection = client.collections.get(collection_name)
-
-        if tenant_name is None:
-            return collection
-
-        if not collection.tenants.exists(tenant_name):
-            return self.create_tenant(collection_name, tenant_name)
-        else:
-            return collection.with_tennant(tenant_name)
+        return collection.with_tenant(tenant_name)
 
     def persist_document(
         self,

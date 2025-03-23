@@ -177,7 +177,7 @@ class WeaviateSimilaritySearchRequestInvoker(ConfiguredWeaviateSimilaritySearchI
         return query_params.model_dump()
 
 
-class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker):
+class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker, ABC):
 
     def __init__(
         self, client_factory: WeaviateClientFactory, persist_config: dict
@@ -193,10 +193,10 @@ class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker):
         return cls(client_factory, persist_config)
 
 
-class WeaviateCreateCollectionInvoker(AbstractWeaviatePersistorInvoker):
+class WeaviateCreateTenantInvoker(AbstractWeaviatePersistorInvoker):
     """
-    This Invoker creates a new collection with an optional tenant. If the collection or
-    tenant within that collection already exists, the creation is silently ignored. Will
+    This Invoker creates a new tenant within a given Collection. If the tenant within
+    that collection already exists, the creation is silently ignored. Will
     return a JSON containing the configuration
 
     Expects a JSON configuration
@@ -213,19 +213,21 @@ class WeaviateCreateCollectionInvoker(AbstractWeaviatePersistorInvoker):
         except json.decoder.JSONDecodeError:
             logger.error("Cannot parse content as params '{content}'", content=content)
             raise ValueError(f"invalid content '{content}'")
-        collection = self.persistor.get_or_create(params)
-        config = collection.config.get()
+
+        collection = self.persistor.get_collection(params)
+        tenant = self.persistor.create_tenant(collection, params.get("tenant_name", None))
+        config = tenant.config.get()
         return json.dumps(
             {
                 "collection_name": config.name,
                 "description": config.description,
                 "multi_tenancy": {
-                    "enabled": config.multi_tenancy.enabled,
-                    "auto_tenant_creation": config.multi_tenancy.auto_tenant_creation,
-                    "auto_tenant_activation": config.multi_tenancy.auto_tenant_activation,
+                    "enabled": config.multi_tenancy_config.enabled,
+                    "auto_tenant_creation": config.multi_tenancy_config.auto_tenant_creation,
+                    "auto_tenant_activation": config.multi_tenancy_config.auto_tenant_activation,
                 },
                 "properties": {
-                    name: prop.name for name, prop in config.properties.items()
+                    prop.name: str(prop.data_type) for prop in config.properties
                 },
             }
         )
