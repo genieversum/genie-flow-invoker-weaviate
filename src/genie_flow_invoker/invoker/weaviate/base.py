@@ -87,6 +87,9 @@ class WeaviateClientProcessor:
     ) -> Collection:
         collection = self.get_collection(collection_name_or_params)
 
+        if isinstance(collection_name_or_params, dict):
+            tenant_name = collection_name_or_params.get("tenant_name", None)
+
         tenant_name = tenant_name or self.base_params.tenant_name
         if tenant_name is None:
             return collection

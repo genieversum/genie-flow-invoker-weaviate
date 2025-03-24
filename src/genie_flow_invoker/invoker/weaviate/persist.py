@@ -194,6 +194,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
         document: ChunkedDocument,
         collection_name: Optional[str] = None,
         tenant_name: Optional[str] = None,
+        vector_name: str = "default",
     ) -> tuple[str, Optional[str], int, int]:
         """
         Persist a given chunked document into a collection with the given name and potentially
@@ -205,6 +206,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
         :param document: the `ChunkedDocument` to persist
         :param collection_name: the name of the collection to store it into
         :param tenant_name: an Optional name of a tenant to store the document into.
+        :param vector_name: the name of the vector to store the document embeddings into.
         :return: tuple of the used collection_name and tenant_name, nr_inserted and nr_replaces,
                 respectively the number of inserted and replaced chunks
         """
@@ -276,6 +278,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
                     "document_metadata": clean_nested_metadata_properties(document.document_metadata),
                 }
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
+                vector = {vector_name: chunk.embedding} if chunk.embedding else None
 
                 if not collection.data.exists(chunk.chunk_id):
                     logger.debug(
@@ -285,7 +288,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
                         uuid=chunk.chunk_id,
                         properties=properties,
                         references=references,
-                        vector=chunk.embedding,
+                        vector=vector,
                     )
                     nr_inserted += 1
                 else:
@@ -296,7 +299,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
                         uuid=chunk.chunk_id,
                         properties=properties,
                         references=references,
-                        vector=chunk.embedding,
+                        vector=vector,
                     )
                     nr_replaced += 1
 

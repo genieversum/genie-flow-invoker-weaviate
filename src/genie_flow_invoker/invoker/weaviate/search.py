@@ -302,9 +302,10 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
 
         # conduct the search and apply the parent strategy
         logger.debug(
-            "using search function {function_name} with parameters {parameters}",
+            "using search function '{function_name}' with parameters {function_params}",
             function_name=search_function.__name__,
-            parameters=bound_function.arguments.keys(),
+            function_params=function_params,
+            **function_params,
         )
         query_results = search_function(**bound_function.arguments)
         query_results = self.apply_parent_strategy(query_results, **query_params)
