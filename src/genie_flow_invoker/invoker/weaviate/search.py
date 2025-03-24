@@ -1,6 +1,6 @@
 import json
 from abc import ABC, abstractmethod
-from inspect import signature
+from inspect import signature, Parameter
 from typing import Any, Callable, Optional
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
@@ -294,7 +294,11 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         # bind the necessary arguments to the values in query_params
         search_function = self._conduct_search(collection)
         function_signature = signature(search_function)
-        bound_function = function_signature.bind(**query_params)
+        function_params = {
+            k:query_params[k] if k in query_params else param.default
+            for k, param in function_signature.parameters.items()
+        }
+        bound_function = function_signature.bind(**function_params)
 
         # conduct the search and apply the parent strategy
         logger.debug(
