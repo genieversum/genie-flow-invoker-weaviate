@@ -159,7 +159,9 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
             json_kwargs=json.dumps(kwargs),
         )
         query_params = self.base_query_params.copy()
-        query_params.update(**kwargs)
+        for kwarg_k, kwarg_v in kwargs.items():
+            if kwarg_v is not None:
+                query_params[kwarg_k] = kwarg_v
 
         collection = self.get_collection_or_tenant(query_params)
         query_params["collection"] = collection
@@ -186,7 +188,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
 
         # if we need the parents, pull in the references too
         if query_params["parent_strategy"] is not None:
-            query_params["return_references"] = [QueryReference(link_on="parent_id")]
+            query_params["return_references"] = [QueryReference(link_on="parent")]
 
         # if we need to operate at a certain level, filter on that level
         if query_params["operation_level"] is not None:
@@ -244,7 +246,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
             for child in query_results:
                 if child.references is None:
                     continue
-                for parent in child.references["parent"]:
+                for parent in child.references["parent"].objects:
                     if parent.uuid not in seen_parents:
                         parents.append(parent)
                         seen_parents.add(parent.uuid)
