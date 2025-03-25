@@ -170,7 +170,8 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         }
         for genie_param, weaviate_param in translations.items():
             if genie_param in query_params:
-                query_params[weaviate_param] = query_params[genie_param]
+                if query_params[genie_param] is not None:
+                    query_params[weaviate_param] = query_params[genie_param]
                 del query_params[genie_param]
 
         # if a non-default vector is specified, set the target to it
