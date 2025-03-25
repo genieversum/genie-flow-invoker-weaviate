@@ -6,6 +6,7 @@ from typing import Any
 from genie_flow_invoker.genie import GenieInvoker
 from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
+from pydantic.json import pydantic_encoder
 
 from .client import WeaviateClientFactory
 from .delete import WeaviateDeleter
@@ -27,7 +28,7 @@ from .model import (
     WeaviateSimilaritySearchRequest,
 )
 from .persist import WeaviatePersistor
-from .search import AbstractSearcher, SimilaritySearcher, VectorSimilaritySearcher
+from .search import AbstractSearcher, SimilaritySearcher, VectorSimilaritySearcher, ChunkedDocumentListModel
 
 
 class AbstractWeaviateInvoker(GenieInvoker, ABC):
@@ -96,7 +97,7 @@ class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
         )
         search_params = self._parse_input(content)
         results = self.searcher.search(**search_params)
-        return json.dumps([result.model_dump() for result in results])
+        return ChunkedDocumentListModel.dump_json(results).decode("utf-8")
 
 
 class WeaviateSimilaritySearchInvoker(ConfiguredWeaviateSimilaritySearchInvoker):

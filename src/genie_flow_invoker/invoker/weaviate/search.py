@@ -1,10 +1,11 @@
 import json
 from abc import ABC, abstractmethod
 from inspect import signature, Parameter
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TypeAlias
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
 from loguru import logger
+from pydantic import TypeAdapter
 
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
@@ -12,6 +13,10 @@ from genie_flow_invoker.invoker.weaviate.utils import compile_filter
 from weaviate.classes.query import Filter, Metrics, QueryReference
 from weaviate.collections import Collection
 from weaviate.collections.classes.internal import Object
+
+
+ChunkedDocumentList: TypeAlias = list[ChunkedDocument]
+ChunkedDocumentListModel = TypeAdapter(ChunkedDocumentList)
 
 
 def compile_chunked_documents(
@@ -47,7 +52,7 @@ def compile_chunked_documents(
             ),
             hierarchy_level=properties["hierarchy_level"],
             parent_id=str(o.references["parent"][0].uuid) if o.references else None,
-            embedding=o.vector[named_vector] if o.vector is not None else None,
+            embedding=o.vector[named_vector] if o.vector is not None and len(o.vector) > 0 else None,
         )
         logger.debug(
             "created a chunk with id {chunk_id}",
@@ -307,7 +312,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
             function_params=function_params,
             **function_params,
         )
-        query_results = search_function(**bound_function.arguments)
+        query_results = search_function(**bound_function.arguments).objects
         query_results = self.apply_parent_strategy(query_results, **query_params)
 
         # compile the list of chunked documents and return it

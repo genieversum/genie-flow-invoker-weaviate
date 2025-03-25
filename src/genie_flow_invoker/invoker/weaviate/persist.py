@@ -275,7 +275,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
                     "original_span_start": chunk.original_span[0],
                     "original_span_end": chunk.original_span[1],
                     "hierarchy_level": chunk.hierarchy_level,
-                    "document_metadata": clean_nested_metadata_properties(document.document_metadata),
+                    "document_metadata": clean_nested_metadata_properties(document.document_metadata),   #TODO move outside loop
                 }
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
                 vector = {vector_name: chunk.embedding} if chunk.embedding else None
