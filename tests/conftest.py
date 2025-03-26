@@ -1,4 +1,5 @@
 import uuid as uuidlib
+from collections import namedtuple
 from typing import Optional, Any
 
 from weaviate.collections.classes.internal import Object
@@ -6,6 +7,9 @@ from weaviate.collections.classes.batch import DeleteManyReturn
 from pytest import fixture
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
+
+
+SearchResults = namedtuple("SearchResults", ["objects"])
 
 
 class Recorder:
@@ -38,10 +42,10 @@ class MockQuery:
         return self.query_results
 
     def near_text(self, **kwargs):
-        return self.query_results
+        return SearchResults(self.query_results)
 
     def near_vector(self, **kwargs):
-        return self.query_results
+        return SearchResults(self.query_results)
 
     def hybrid(self, **kwargs):
         return self.query_results
@@ -235,7 +239,7 @@ def collections_results():
         ),
         metadata=dict(),
         references=dict(
-            parent=[parent],
+            parent=SearchResults([parent]),
         ),
         vector=dict(default=[3.14] * 12, low_space=[3.1] * 3),
     )

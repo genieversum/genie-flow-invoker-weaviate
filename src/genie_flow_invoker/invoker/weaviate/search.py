@@ -51,7 +51,7 @@ def compile_chunked_documents(
                 properties["original_span_end"],
             ),
             hierarchy_level=properties["hierarchy_level"],
-            parent_id=str(o.references["parent"][0].uuid) if o.references else None,
+            parent_id=str(o.references["parent"].objects[0].uuid) if o.references else None,
             embedding=o.vector[named_vector] if o.vector is not None and len(o.vector) > 0 else None,
         )
         logger.debug(

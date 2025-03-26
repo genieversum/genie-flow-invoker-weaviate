@@ -146,7 +146,7 @@ def test_similarity_query_params_parent(weaviate_client_factory):
     query_params = searcher.create_query_params("my query")
 
     assert len(query_params["return_references"]) == 1
-    assert query_params["return_references"][0].link_on == "parent_id"
+    assert query_params["return_references"][0].link_on == "parent"
 
 
 def test_similarity_query_params_has_all(weaviate_client_factory):
