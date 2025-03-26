@@ -1,4 +1,4 @@
-import uuid
+import uuid as uuidlib
 from typing import Optional, Any
 
 from weaviate.collections.classes.internal import Object
@@ -11,6 +11,9 @@ class MockQuery:
 
     def __init__(self, query_results: list[Object]):
         self.query_results = query_results
+
+    def fetch_objects(self):
+        return self.query_results
 
     def near_text(self, **kwargs):
         return self.query_results
@@ -30,11 +33,13 @@ class MockCollectionData:
 
     def insert(
             self,
-            uuid: uuid.UUID,
+            uuid: str | uuidlib.UUID,
             properties: dict[str, Any],
             references: dict[str, Any],
             vector: list[float],
     ):
+        if isinstance(uuid, str):
+            uuid = uuidlib.UUID(uuid)
         self.query_results.append(
             Object(
                 collection=self.collection_name,
@@ -50,17 +55,21 @@ class MockCollectionData:
 
     def replace(
             self,
-            uuid: uuid.UUID,
+            uuid: str | uuidlib.UUID,
             properties: dict[str, Any],
             references: dict[str, Any],
             vector: list[float],
     ):
+        if type(uuid) is str:
+            uuid = uuidlib.UUID(uuid)
         self.query_results = [d for d in self.query_results if d.uuid != uuid]
         self.insert(uuid, properties, references, vector)
 
-    def exists(self, uuid: uuid.UUID) -> bool:
+    def exists(self, uuid: str | uuidlib.UUID) -> bool:
+        if type(uuid) is str:
+            uuid = uuidlib.UUID(uuid)
         for mine in self.query_results:
-            if str(mine.uuid) == uuid:
+            if mine.uuid == uuid:
                 return True
         return False
 
@@ -143,48 +152,46 @@ class MockWeaviateClientFactory:
 
 @fixture
 def collections_results():
+    parent = Object(
+        collection="SimpleCollection",
+        uuid=uuidlib.uuid3(uuidlib.NAMESPACE_OID, "second document"),
+        properties=dict(
+            filename="some_file.txt",
+            content="Hello Parent",
+            original_span_start=0,
+            original_span_end=42,
+            hierarchy_level=0,
+            document_metadata=dict(
+                language="en",
+                source="pdf",
+            ),
+        ),
+        metadata=dict(),
+        references=None,
+        vector=dict(default=[2.27]*12, low_space=[2.3]*3),
+    )
+    child = Object(
+        collection="SimpleCollection",
+        uuid=uuidlib.uuid3(uuidlib.NAMESPACE_OID, "first document"),
+        properties=dict(
+            filename="some_file.txt",
+            content="Hello World",
+            original_span_start=0,
+            original_span_end=42,
+            hierarchy_level=1,
+            document_metadata=dict(
+                language="en",
+                source="pdf",
+            ),
+        ),
+        metadata=dict(),
+        references=dict(
+            parent=[parent],
+        ),
+        vector=dict(default=[3.14]*12, low_space=[3.1]*3),
+    )
     return dict(
-        SimpleCollection=[
-            Object(
-                collection="SimpleCollection",
-                uuid=uuid.uuid3(uuid.NAMESPACE_OID, "first document"),
-                properties=dict(
-                    filename="some_file.txt",
-                    content="Hello World",
-                    original_span_start=0,
-                    original_span_end=42,
-                    hierarchy_level=1,
-                    document_metadata=dict(
-                        language="en",
-                        source="pdf",
-                    ),
-                ),
-                metadata=dict(),
-                references=dict(
-                    parent=[
-                        Object(
-                            collection="SimpleCollection",
-                            uuid=uuid.uuid3(uuid.NAMESPACE_OID, "second document"),
-                            properties=dict(
-                                filename="some_file.txt",
-                                content="Hello Parent",
-                                original_span_start=0,
-                                original_span_end=42,
-                                hierarchy_level=0,
-                                document_metadata=dict(
-                                    language="en",
-                                    source="pdf",
-                                ),
-                            ),
-                            metadata=dict(),
-                            references=None,
-                            vector=dict(default=[2.27]*12, low_space=[2.3]*3),
-                        )
-                    ]
-                ),
-                vector=dict(default=[3.14]*12, low_space=[3.1]*3),
-            )
-        ]
+        SimpleCollection=[parent, child],
     )
 
 
@@ -195,28 +202,53 @@ def weaviate_client_factory(collections_results):
 
 @fixture
 def chunked_document():
+    parent = DocumentChunk(
+        chunk_id=str(uuidlib.uuid3(uuidlib.NAMESPACE_OID, "second document")),
+        content="Hello Parent",
+        original_span=(0, 42),
+        hierarchy_level=0,
+        parent_id=None,
+        embedding=[2.27]*12,
+    )
+    child = DocumentChunk(
+        chunk_id=str(uuidlib.uuid3(uuidlib.NAMESPACE_OID, "first document")),
+        content="Hello World",
+        original_span=(0, 42),
+        hierarchy_level=1,
+        parent_id=parent.chunk_id,
+        embedding=[3.14]*12,
+    )
     return ChunkedDocument(
         filename="some_file.txt",
         document_metadata={
             "language": "en",
             "source": "pdf",
         },
-        chunks=[
-            DocumentChunk(
-                chunk_id=str(uuid.uuid3(uuid.NAMESPACE_OID, "second document")),
-                content="Hello Parent",
-                original_span=(0, 42),
-                hierarchy_level=0,
-                parent_id=None,
-                embedding=[2.27]*12,
-            ),
-            DocumentChunk(
-                chunk_id=str(uuid.uuid3(uuid.NAMESPACE_OID, "first document")),
-                content="Hello World",
-                original_span=(0, 42),
-                hierarchy_level=1,
-                parent_id=str(uuid.uuid3(uuid.NAMESPACE_OID, "second document")),
-                embedding=[3.14]*12,
-            )
-        ]
+        chunks=[parent, child],
+    )
+
+
+@fixture
+def other_chunked_document():
+    one = DocumentChunk(
+        chunk_id=str(uuidlib.uuid3(uuidlib.NAMESPACE_OID, "document one")),
+        content="to Be or Not To Be, That is the Question",
+        original_span=(255, 512),
+        hierarchy_level=0,
+        parent_id=None,
+    )
+    two = DocumentChunk(
+        chunk_id=str(uuidlib.uuid3(uuidlib.NAMESPACE_OID, "document two")),
+        content="Is this a dagger I see before me?",
+        original_span=(1024, 4096),
+        hierarchy_level=0,
+        parent_id=None,
+    )
+    return ChunkedDocument(
+        filename="shakespear.txt",
+        document_metadata={
+            "language": "en",
+            "source": "txt",
+        },
+        chunks=[one, two],
     )

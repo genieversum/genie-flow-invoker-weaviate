@@ -1,7 +1,7 @@
 from typing import Optional, Literal
 
-from genie_flow_invoker.doc_proc import SimilaritySearchRequest
-from pydantic import Field
+from genie_flow_invoker.doc_proc import SimilaritySearchRequest, ChunkedDocument
+from pydantic import Field, BaseModel
 
 
 WeaviateDistanceMethodType = Literal[
@@ -30,4 +30,34 @@ class WeaviateSimilaritySearchRequest(SimilaritySearchRequest):
     )
     vector_name: Optional[str] = Field(
         default=None, description="The named vector for the similarity search"
+    )
+
+
+class WeaviatePersistenceRequest(BaseModel):
+    collection_name: Optional[str] = Field(
+        default=None,
+        description="The collection name to store the chunked document in",
+    )
+    tenant_name: Optional[str] = Field(
+        default=None,
+        description="The tenant name to store the chunked document in",
+    )
+    document: ChunkedDocument = Field(
+        description="The document to persist",
+    )
+
+
+class WeaviatePersistenceResponse(BaseModel):
+    collection_name: str = Field(
+        description="The collection name to store the chunked document in",
+    )
+    tenant_name: Optional[str] = Field(
+        default=None,
+        description="The tenant name to store the chunked document in",
+    )
+    nr_inserts: int = Field(
+        description="The number of chunks inserted in the collection",
+    )
+    nr_replaces: int = Field(
+        description="The number of chunks replaced in the collection",
     )

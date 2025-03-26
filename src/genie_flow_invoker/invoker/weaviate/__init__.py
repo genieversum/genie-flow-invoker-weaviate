@@ -8,12 +8,26 @@ from pydantic_core._pydantic_core import ValidationError
 
 from genie_flow_invoker.genie import GenieInvoker
 from genie_flow_invoker.invoker.weaviate.client import WeaviateClientFactory
-from genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest
+from genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest, \
+    WeaviatePersistenceRequest, WeaviatePersistenceResponse
+from genie_flow_invoker.invoker.weaviate.persist import WeaviatePersistor
 from genie_flow_invoker.invoker.weaviate.search import (
     SimilaritySearcher,
     AbstractSearcher,
     VectorSimilaritySearcher,
 )
+
+
+class AbstractWeaviateInvoker(GenieInvoker, ABC):
+
+    def __init__(self, client_factory: WeaviateClientFactory):
+        self.client_factory = client_factory
+
+    @classmethod
+    def from_config(cls, config: dict):
+        connection_config = config["connection"]
+        client_factory = WeaviateClientFactory(connection_config)
+        return cls(client_factory)
 
 
 class ConfiguredWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
@@ -40,11 +54,9 @@ class ConfiguredWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
         should include a key `connection` which contains all keys for setting up the connection.
         Should also include the key `query` for all (default) query parameters.
         """
-        connection_config = config["connection"]
-        client_factory = WeaviateClientFactory(connection_config)
-
+        super_class = super(AbstractWeaviateInvoker).from_config(config)
         query_config = config["query"]
-        return cls(client_factory, query_config)
+        return cls(super_class.client_factory, query_config)
 
     @property
     @abstractmethod
@@ -151,3 +163,87 @@ class WeaviateSimilaritySearchRequestInvoker(ConfiguredWeaviateSimilaritySearchI
             params=query_params.model_dump().keys(),
         )
         return query_params.model_dump()
+
+
+class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker):
+
+    def __init__(self, client_factory: WeaviateClientFactory, persist_config: dict) -> None:
+        super().__init__(client_factory)
+        self.persist_config = persist_config
+        self.persistor = WeaviatePersistor(self.client_factory, self.persist_config)
+
+    @classmethod
+    def from_config(cls, config: dict):
+        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        persist_config = config["persist"]
+        return cls.__init__(super_class.client_factory, persist_config)
+
+
+class WeaviateCreateCollectionInvoker(AbstractWeaviatePersistorInvoker):
+    """
+    This Invoker creates a new collection with an optional tenant. If the collection or
+    tenant within that collection already exists, the creation is silently ignored. Will
+    return a JSON containing the configuration
+
+    Expects a JSON configuration
+    object, containing:
+
+    - collection_name: name of the collection
+
+    - tenant_name: optional name of
+    """
+
+    def invoke(self, content: str) -> str:
+        try:
+            params = json.loads(content)
+        except json.decoder.JSONDecodeError:
+            logger.error("Cannot parse content as params '{content}'", content=content)
+            raise ValueError(f"invalid content '{content}'")
+        collection = self.persistor.get_or_create(params)
+        config = collection.config.get()
+        return json.dumps(
+            {
+                "collection_name": config.name,
+                "description": config.description,
+                "multi_tenancy": {
+                    "enabled": config.multi_tenancy.enabled,
+                    "auto_tenant_creation": config.multi_tenancy.auto_tenant_creation,
+                    "auto_tenant_activation": config.multi_tenancy.auto_tenant_activation,
+                },
+                "properties": {
+                    name: prop.name for name, prop in config.properties.items()
+                },
+            }
+        )
+
+
+class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
+    """
+    This invoker inserts a Chunked Document into a collection with the given name and potentially
+    into a tenant with the given name. Expects a JSON dump of a `WeaviateSimilaritySearchRequest`
+    and returns a JSON dump of a `WeaviateSimilaritySearchResponse`.
+    """
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviatePersistenceRequest.model_validate_json(content)
+        except ValidationError as e:
+            logger.error(
+                "Cannot parse content as persistence request '{content}', error: {error}",
+                content=content,
+                error=str(e),
+            )
+            raise ValueError("invalid content '{content}'")
+
+        collection_name, tenant_name, nr_inserted, nr_replaced = self.persistor.persist_document(
+            request.document,
+            request.collection_name,
+            request.tenant_name,
+        )
+
+        return WeaviatePersistenceResponse(
+            collection_name=collection_name,
+            tenant_name=tenant_name,
+            nr_inserts=nr_inserted,
+            nr_replaces=nr_replaced,
+        ).model_dump_json()

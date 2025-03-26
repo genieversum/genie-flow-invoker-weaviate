@@ -300,6 +300,8 @@ class AbstractSearcher(ABC):
             # return a deduplicated list of parents, retaining the order
             parents = list()
             for child in query_results:
+                if child.references is None:
+                    continue
                 for parent in child.references["parent"]:
                     if parent.uuid not in seen_parents:
                         parents.append(parent)
