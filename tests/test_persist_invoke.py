@@ -10,6 +10,7 @@ def test_persist_invocation(weaviate_client_factory, chunked_document):
     config = {
         "collection_name": "SimpleCollection",
         "tenant_name": None,
+        "idempotent": True,
     }
     invoker = WeaviatePersistInvoker(weaviate_client_factory, config)
 

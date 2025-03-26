@@ -292,9 +292,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
                     )
                     nr_inserted += 1
                 else:
-                    logger.debug(
-                        "replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id
-                    )
+                    logger.debug("replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
                     collection.data.replace(
                         uuid=chunk.chunk_id,
                         properties=properties,

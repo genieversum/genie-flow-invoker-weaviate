@@ -281,7 +281,7 @@ class AbstractWeaviateDeleteInvoker(AbstractWeaviateInvoker, ABC):
     def from_config(cls, config: dict):
         client_factory = cls.create_client_factory(config)
         delete_config = config["delete"]
-        return cls.__init__(super_class.client_factory, delete_config)
+        return cls.__init__(client_factory, delete_config)
 
 
 class WeaviateDeleteChunkInvoker(AbstractWeaviateDeleteInvoker):
