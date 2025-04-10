@@ -1,9 +1,10 @@
-from typing import Optional, Any
+from typing import Any, Optional
+
+from genie_flow_invoker.utils import get_config_value
+from loguru import logger
 
 import weaviate
-from loguru import logger
 from weaviate import WeaviateClient
-from genie_flow_invoker.utils import get_config_value
 
 
 class WeaviateClientFactory:

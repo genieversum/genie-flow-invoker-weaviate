@@ -1,11 +1,19 @@
+import re
 from collections import defaultdict
-from typing import Optional
+from typing import Optional, Any
 
 from genie_flow_invoker.doc_proc import ChunkedDocument
-from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from loguru import logger
+from weaviate.exceptions import UnexpectedStatusCodeError
+
+from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
+from weaviate.classes.config import (
+    Configure,
+    DataType,
+    Property,
+    ReferenceProperty,
+)
 from weaviate.collections import Collection
-from weaviate.classes.config import Configure, DataType, Property, ReferenceProperty
 
 
 def _compile_properties(params: dict):
@@ -99,131 +107,94 @@ def _compile_cross_references(params: dict):
     ]
 
 
-class WeaviatePersistor:
+_METADATA_FIRST_CHAR = re.compile("[_A-Za-z]")
+_METADATA_REMAINING_CHARS = re.compile("[_0-9A-Za-z]")
+def _clean_metadata_key(key: str) -> str:
+    if len(key) == 0:
+        logger.error("Metadata contains empty key")
+        raise ValueError("Metadata contains empty key")
 
-    def __init__(
-        self, client_factory: WeaviateClientFactory, persist_params: dict
-    ) -> None:
-        self.client_factory = client_factory
+    result = key[0] if _METADATA_FIRST_CHAR.match(key[0]) else "_"
+    for c in key[1:]:
+        result += c if _METADATA_REMAINING_CHARS.match(c) else "_"
+    return result
 
-        self.base_persist_params = dict(
-            collection_name=persist_params.get("collection_name", None),
-            tenant_name=persist_params.get("tenant_name", None),
-            idempotent=persist_params.get("idempotent", False),
-        )
 
-    def compile_collection_tenant_names(
-        self,
-        collection_name: Optional[str],
-        tenant_name: Optional[str],
-    ) -> tuple[str, Optional[str]]:
-        result = (
-            collection_name or self.base_persist_params.get("collection_name"),
-            tenant_name or self.base_persist_params.get("tenant_name"),
-        )
-        if result[0] is None:
-            raise ValueError("collection_name is required")
-        return result
+def clean_nested_metadata_properties(metadata: Any) -> Any:
+    if isinstance(metadata, dict):
+        return {
+            _clean_metadata_key(k): clean_nested_metadata_properties(v)
+            for k, v in metadata.items()
+        }
+    if isinstance(metadata, list):
+        return [clean_nested_metadata_properties(e) for e in metadata]
+    if isinstance(metadata, tuple):
+        return (clean_nested_metadata_properties(e) for e in metadata)
+    if isinstance(metadata, set):
+        return {clean_nested_metadata_properties(e) for e in metadata}
+    return metadata
+
+
+class WeaviatePersistor(WeaviateClientProcessor):
 
     def create_collection(
-        self, persist_params: dict, omnipotent: bool = False
+        self,
+        persist_params: dict,
     ) -> Collection:
         """
         Create a new collection with the given name and the configuration that is compiled from
         the given persist_params. Raises a ValueError when a collection with that name
-        already exists - unless omnipotent is set to True.
+        already exists.
 
         :param persist_params: the configuration parameters to create the collection with
-        :param omnipotent: a boolean indicating to ignore creating already existing collections.
-                           Defauts to False
         :return: the newly created collection
         """
-        params = self.base_persist_params.copy()
-        params.update(persist_params)
-
-        collection_name: Optional[str] = params.get("collection_name", None)
-        if collection_name is None:
-            raise ValueError("No collection name specified")
+        collection_name, _ = self.compile_collection_tenant_names(
+            persist_params.get("collection_name", None),
+        )
 
         with self.client_factory as client:
-            if client.collections.exists(collection_name):
-                if omnipotent:
-                    logger.warning(
-                        "Skipping creation of collection '{collection_name}' that already exists.",
-                        collection_name=collection_name,
-                    )
-                    return client.collections.get(collection_name)
-
-                logger.error(
-                    "Cannot create collection with name '{collection_name}' "
-                    "because it already exists.",
-                    collection_name=collection_name,
+            try:
+                return client.collections.create(
+                    name=collection_name,
+                    properties=_compile_properties(persist_params),
+                    multi_tenancy_config=_compile_multi_tenancy(persist_params),
+                    references=_compile_cross_references(persist_params),
                 )
-                raise ValueError("Collection {collection_name} already exists")
-
-            return client.collections.create(
-                name=collection_name,
-                properties=_compile_properties(params),
-                multi_tenancy_config=_compile_multi_tenancy(params),
-                references=_compile_cross_references(params),
-            )
+            except UnexpectedStatusCodeError as e:
+                logger.error(
+                    "Failed to create collection '{collection_name}', error={error}",
+                    collection_name=collection_name,
+                    error=str(e),
+                )
+                raise ValueError("Failed to create collection") from e
 
     def create_tenant(
         self,
-        collection_name: str,
-        tenant_name: str,
+        collection: Collection,
+        tenant_name: Optional[str],
     ) -> Collection:
         """
         Create a new tenant for a collection with a given name. If a tenant already exists,
-        with the given tenant name, a ValueError is raised - unless idempotent is set to True
-        in which case the creation is silently ignored.
+        with the given tenant name, a ValueError is raised.
 
-        :param collection_name: name of the collection to add to
+        :param collection: the Collection to create the tenant in
         :param tenant_name: the name of the tenant to add
         """
-        with self.client_factory as client:
-            if not client.collections.exists(collection_name):
-                raise KeyError(f"Collection {collection_name} does not exist")
-
-            collection = client.collections.get(collection_name)
-            if collection.tenants.exists(tenant_name):
-                if self.base_persist_params["idempotent"]:
-                    logger.warning(
-                        "Skipping creation of tenant '{tenant_name}' that already exists.",
-                        tenant_name=tenant_name,
-                    )
-                    return collection.with_tenant(tenant_name)
-                raise ValueError(f"Tenant {tenant_name} already exists")
+        tenant_name = tenant_name or self.base_params.tenant_name
+        if tenant_name is None:
+            logger.error("Cannot create tenant without a tenant name")
+            raise ValueError("Cannot create tenant with no tenant name")
 
         collection.tenants.create([tenant_name])
-        return collection.collections.get(collection_name).with_tennant(tenant_name)
-
-    def get_or_create(self, params: dict) -> Collection:
-        collection_name: Optional[str] = params.get("collection_name", None)
-        if collection_name is None:
-            raise ValueError("No collection name specified")
-
-        with self.client_factory as client:
-            if not client.collections.exists(collection_name):
-                collection = self.create_collection(params)
-            else:
-                collection = client.collections.get(collection_name)
-
-        tenant_name: Optional[str] = params.get("tenant_name", None)
-        if tenant_name is None:
-            return collection
-
-        with self.client_factory as client:
-            if not collection.tenants.exists(tenant_name):
-                return self.create_tenant(collection_name, tenant_name)
-            else:
-                return collection.with_tennant(tenant_name)
+        return collection.with_tenant(tenant_name)
 
     def persist_document(
         self,
         document: ChunkedDocument,
         collection_name: Optional[str] = None,
         tenant_name: Optional[str] = None,
+        vector_name: str = "default",
     ) -> tuple[str, Optional[str], int, int]:
         """
         Persist a given chunked document into a collection with the given name and potentially
@@ -235,6 +206,7 @@ class WeaviatePersistor:
         :param document: the `ChunkedDocument` to persist
         :param collection_name: the name of the collection to store it into
         :param tenant_name: an Optional name of a tenant to store the document into.
+        :param vector_name: the name of the vector to store the document embeddings into.
         :return: tuple of the used collection_name and tenant_name, nr_inserted and nr_replaces,
                 respectively the number of inserted and replaced chunks
         """
@@ -252,6 +224,13 @@ class WeaviatePersistor:
                 collection_name=collection_name,
             )
             collection = client.collections.get(collection_name)
+
+        if not collection.exists():
+            logger.error(
+                "collection '{collection_name}' does not exist.",
+                collection_name=collection_name,
+            )
+            raise KeyError(f"Collection {collection_name} does not exist")
 
         if tenant_name is not None:
             if not collection.tenants.exists(tenant_name):
@@ -296,9 +275,10 @@ class WeaviatePersistor:
                     "original_span_start": chunk.original_span[0],
                     "original_span_end": chunk.original_span[1],
                     "hierarchy_level": chunk.hierarchy_level,
-                    "document_metadata": document.document_metadata,
+                    "document_metadata": clean_nested_metadata_properties(document.document_metadata),   #TODO move outside loop
                 }
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
+                vector = {vector_name: chunk.embedding} if chunk.embedding else None
 
                 if not collection.data.exists(chunk.chunk_id):
                     logger.debug(
@@ -308,26 +288,16 @@ class WeaviatePersistor:
                         uuid=chunk.chunk_id,
                         properties=properties,
                         references=references,
-                        vector=chunk.embedding,
+                        vector=vector,
                     )
                     nr_inserted += 1
                 else:
-                    if not self.base_persist_params["idempotent"]:
-                        logger.error(
-                            "refusing to insert duplicate chunk with id {chunk_id}",
-                            chunk_id=chunk.chunk_id,
-                        )
-                        raise ValueError(f"duplicate chunk with id {chunk.chunk_id}")
-
-                    logger.debug(
-                        "idempotent, so replacing chunk with id {chunk_id}",
-                        chunk_id=chunk.chunk_id,
-                    )
+                    logger.debug("replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
                     collection.data.replace(
                         uuid=chunk.chunk_id,
                         properties=properties,
                         references=references,
-                        vector=chunk.embedding,
+                        vector=vector,
                     )
                     nr_replaced += 1
 

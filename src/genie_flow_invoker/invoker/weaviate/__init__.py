@@ -1,21 +1,34 @@
-from abc import ABC, abstractmethod
 import json
+from abc import ABC, abstractmethod
 from hashlib import md5
 from typing import Any
 
+from genie_flow_invoker.genie import GenieInvoker
 from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
+from pydantic.json import pydantic_encoder
 
-from genie_flow_invoker.genie import GenieInvoker
-from genie_flow_invoker.invoker.weaviate.client import WeaviateClientFactory
-from genie_flow_invoker.invoker.weaviate.model import WeaviateSimilaritySearchRequest, \
-    WeaviatePersistenceRequest, WeaviatePersistenceResponse
-from genie_flow_invoker.invoker.weaviate.persist import WeaviatePersistor
-from genie_flow_invoker.invoker.weaviate.search import (
-    SimilaritySearcher,
-    AbstractSearcher,
-    VectorSimilaritySearcher,
+from .client import WeaviateClientFactory
+from .delete import WeaviateDeleter
+from .exceptions import (
+    CollectionNotFoundException,
+    InvalidFilterException,
+    NoMultiTenancySupportException,
+    TenantNotFoundException,
+    WeaviateDeleteException,
 )
+from .model import (
+    WeaviateDeleteByFilenameRequest,
+    WeaviateDeleteByFilterRequest,
+    WeaviateDeleteChunksRequest,
+    WeaviateDeleteErrorResponse,
+    WeaviateDeleteMessage,
+    WeaviatePersistenceRequest,
+    WeaviatePersistenceResponse,
+    WeaviateSimilaritySearchRequest,
+)
+from .persist import WeaviatePersistor
+from .search import AbstractSearcher, SimilaritySearcher, VectorSimilaritySearcher, ChunkedDocumentListModel
 
 
 class AbstractWeaviateInvoker(GenieInvoker, ABC):
@@ -24,19 +37,19 @@ class AbstractWeaviateInvoker(GenieInvoker, ABC):
         self.client_factory = client_factory
 
     @classmethod
-    def from_config(cls, config: dict):
+    def create_client_factory(cls, config: dict):
         connection_config = config["connection"]
-        client_factory = WeaviateClientFactory(connection_config)
-        return cls(client_factory)
+        return WeaviateClientFactory(connection_config)
 
 
-class ConfiguredWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
+class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
 
     def __init__(
         self,
         client_factory: WeaviateClientFactory,
         query_config: dict[str, Any],
     ) -> None:
+        super().__init__(client_factory)
         """
         A Genie Invoker to retrieve documents from Weaviate, using similarity search.
 
@@ -54,9 +67,9 @@ class ConfiguredWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
         should include a key `connection` which contains all keys for setting up the connection.
         Should also include the key `query` for all (default) query parameters.
         """
-        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        client_factory = cls.create_client_factory(config)
         query_config = config["query"]
-        return cls(super_class.client_factory, query_config)
+        return cls(client_factory, query_config)
 
     @property
     @abstractmethod
@@ -84,7 +97,7 @@ class ConfiguredWeaviateSimilaritySearchInvoker(GenieInvoker, ABC):
         )
         search_params = self._parse_input(content)
         results = self.searcher.search(**search_params)
-        return json.dumps([result.model_dump() for result in results])
+        return ChunkedDocumentListModel.dump_json(results).decode("utf-8")
 
 
 class WeaviateSimilaritySearchInvoker(ConfiguredWeaviateSimilaritySearchInvoker):
@@ -165,24 +178,26 @@ class WeaviateSimilaritySearchRequestInvoker(ConfiguredWeaviateSimilaritySearchI
         return query_params.model_dump()
 
 
-class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker):
+class AbstractWeaviatePersistorInvoker(AbstractWeaviateInvoker, ABC):
 
-    def __init__(self, client_factory: WeaviateClientFactory, persist_config: dict) -> None:
+    def __init__(
+        self, client_factory: WeaviateClientFactory, persist_config: dict
+    ) -> None:
         super().__init__(client_factory)
         self.persist_config = persist_config
         self.persistor = WeaviatePersistor(self.client_factory, self.persist_config)
 
     @classmethod
     def from_config(cls, config: dict):
-        super_class = super(AbstractWeaviateInvoker).from_config(config)
+        client_factory = cls.create_client_factory(config)
         persist_config = config["persist"]
-        return cls.__init__(super_class.client_factory, persist_config)
+        return cls(client_factory, persist_config)
 
 
-class WeaviateCreateCollectionInvoker(AbstractWeaviatePersistorInvoker):
+class WeaviateCreateTenantInvoker(AbstractWeaviatePersistorInvoker):
     """
-    This Invoker creates a new collection with an optional tenant. If the collection or
-    tenant within that collection already exists, the creation is silently ignored. Will
+    This Invoker creates a new tenant within a given Collection. If the tenant within
+    that collection already exists, the creation is silently ignored. Will
     return a JSON containing the configuration
 
     Expects a JSON configuration
@@ -199,19 +214,21 @@ class WeaviateCreateCollectionInvoker(AbstractWeaviatePersistorInvoker):
         except json.decoder.JSONDecodeError:
             logger.error("Cannot parse content as params '{content}'", content=content)
             raise ValueError(f"invalid content '{content}'")
-        collection = self.persistor.get_or_create(params)
-        config = collection.config.get()
+
+        collection = self.persistor.get_collection(params)
+        tenant = self.persistor.create_tenant(collection, params.get("tenant_name", None))
+        config = tenant.config.get()
         return json.dumps(
             {
                 "collection_name": config.name,
                 "description": config.description,
                 "multi_tenancy": {
-                    "enabled": config.multi_tenancy.enabled,
-                    "auto_tenant_creation": config.multi_tenancy.auto_tenant_creation,
-                    "auto_tenant_activation": config.multi_tenancy.auto_tenant_activation,
+                    "enabled": config.multi_tenancy_config.enabled,
+                    "auto_tenant_creation": config.multi_tenancy_config.auto_tenant_creation,
+                    "auto_tenant_activation": config.multi_tenancy_config.auto_tenant_activation,
                 },
                 "properties": {
-                    name: prop.name for name, prop in config.properties.items()
+                    prop.name: str(prop.data_type) for prop in config.properties
                 },
             }
         )
@@ -235,10 +252,12 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
             )
             raise ValueError("invalid content '{content}'")
 
-        collection_name, tenant_name, nr_inserted, nr_replaced = self.persistor.persist_document(
-            request.document,
-            request.collection_name,
-            request.tenant_name,
+        collection_name, tenant_name, nr_inserted, nr_replaced = (
+            self.persistor.persist_document(
+                request.document,
+                request.collection_name,
+                request.tenant_name,
+            )
         )
 
         return WeaviatePersistenceResponse(
@@ -247,3 +266,128 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
             nr_inserts=nr_inserted,
             nr_replaces=nr_replaced,
         ).model_dump_json()
+
+
+class AbstractWeaviateDeleteInvoker(AbstractWeaviateInvoker, ABC):
+
+    def __init__(
+        self, client_factory: WeaviateClientFactory, delete_config: dict
+    ) -> None:
+        super().__init__(client_factory)
+        self.delete_config = delete_config
+        self.deleter = WeaviateDeleter(self.client_factory, delete_config)
+
+    @classmethod
+    def from_config(cls, config: dict):
+        client_factory = cls.create_client_factory(config)
+        delete_config = config["delete"]
+        return cls.__init__(client_factory, delete_config)
+
+
+class WeaviateDeleteChunkInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteChunksRequest.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete Request")
+            raise ValueError("Failed to parse Weaviate Delete Request")
+
+        result = self.deleter.delete_chunks_by_id(
+            request.chunk_id,
+            request.collection_name,
+            request.tenant_name,
+        )
+        return json.dumps(result)
+
+
+class WeaviateDeleteByFilenameInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteByFilenameRequest.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete by Filename Request")
+            raise ValueError("Failed to parse Weaviate Delete by Filename Request")
+
+        result = self.deleter.delete_chunks_by_filename(
+            filename=request.filename,
+            collection_name=request.collection_name,
+            tenant_name=request.tenant_name,
+        )
+        return json.dumps(result)
+
+
+class WeaviateDeleteByFilterInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            filter_definition = WeaviateDeleteByFilterRequest.model_validate_json(
+                content
+            )
+        except json.decoder.JSONDecodeError:
+            logger.error("failed to parse filter definition")
+            raise ValueError("failed to parse filter definition")
+
+        try:
+            result = self.deleter.delete_by_filter(
+                filter_definition.model_dump(),
+                collection_name=filter_definition.collection_name,
+                tenant_name=filter_definition.tenant_name,
+            )
+            return json.dumps(result)
+        except InvalidFilterException as e:
+            return WeaviateDeleteErrorResponse(
+                collection_name=e.collection_name,
+                tenant_name=e.tenant_name,
+                error_code=e.__name__,
+                error=str(e),
+            ).model_dump_json()
+
+
+class WeaviateDeleteTenantInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteMessage.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete Request")
+            raise ValueError("Failed to parse Weaviate Delete Request")
+
+        try:
+            result = self.deleter.delete_tenant(
+                request.collection_name, request.tenant_name
+            )
+        except WeaviateDeleteException as e:
+            return WeaviateDeleteErrorResponse(
+                collection_name=e.collection_name,
+                tenant_name=e.tenant_name,
+                error_code=e.__class__.__name__,
+                error=str(e),
+            ).model_dump_json()
+
+        return WeaviateDeleteMessage(
+            collection_name=result["collection_name"],
+            tenant_name=result["tenant_name"],
+        ).model_dump_json()
+
+
+class WeaviateDeleteCollectionInvoker(AbstractWeaviateDeleteInvoker):
+
+    def invoke(self, content: str) -> str:
+        try:
+            request = WeaviateDeleteMessage.model_validate_json(content)
+        except ValidationError as e:
+            logger.error("Failed to parse Weaviate Delete Request")
+            raise ValueError("Failed to parse Weaviate Delete Request")
+
+        try:
+            result = self.deleter.delete_collection(request.collection_name)
+        except CollectionNotFoundException as e:
+            return WeaviateDeleteErrorResponse.from_exception(e).model_dump_json(
+                exclude_none=True,
+            )
+
+        return WeaviateDeleteMessage(
+            collection_name=result["collection_name"]
+        ).model_dump_json(exclude_none=True)

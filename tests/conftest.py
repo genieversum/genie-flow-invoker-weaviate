@@ -1,10 +1,36 @@
 import uuid as uuidlib
+from collections import namedtuple
 from typing import Optional, Any
 
 from weaviate.collections.classes.internal import Object
+from weaviate.collections.classes.batch import DeleteManyReturn
 from pytest import fixture
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
+
+
+SearchResults = namedtuple("SearchResults", ["objects"])
+
+
+class Recorder:
+
+    def __init__(self, return_value: Any):
+        self.recording = []
+        self._return_value = return_value
+
+    def record(self, *args, **kwargs):
+        self.recording.append((args, dict(**kwargs)))
+        return self._return_value
+
+
+class MockConfig:
+
+    def get(self):
+        return self
+
+    @property
+    def multi_tenancy_config(self):
+        return True
 
 
 class MockQuery:
@@ -16,10 +42,10 @@ class MockQuery:
         return self.query_results
 
     def near_text(self, **kwargs):
-        return self.query_results
+        return SearchResults(self.query_results)
 
     def near_vector(self, **kwargs):
-        return self.query_results
+        return SearchResults(self.query_results)
 
     def hybrid(self, **kwargs):
         return self.query_results
@@ -32,11 +58,11 @@ class MockCollectionData:
         self.query_results = query_results
 
     def insert(
-            self,
-            uuid: str | uuidlib.UUID,
-            properties: dict[str, Any],
-            references: dict[str, Any],
-            vector: list[float],
+        self,
+        uuid: str | uuidlib.UUID,
+        properties: dict[str, Any],
+        references: dict[str, Any],
+        vector: list[float],
     ):
         if isinstance(uuid, str):
             uuid = uuidlib.UUID(uuid)
@@ -54,11 +80,11 @@ class MockCollectionData:
         )
 
     def replace(
-            self,
-            uuid: str | uuidlib.UUID,
-            properties: dict[str, Any],
-            references: dict[str, Any],
-            vector: list[float],
+        self,
+        uuid: str | uuidlib.UUID,
+        properties: dict[str, Any],
+        references: dict[str, Any],
+        vector: list[float],
     ):
         if type(uuid) is str:
             uuid = uuidlib.UUID(uuid)
@@ -73,10 +99,20 @@ class MockCollectionData:
                 return True
         return False
 
+    def delete_many(self, **kwargs):
+        return DeleteManyReturn(
+            matches=len(self.query_results),
+            objects=self.query_results,
+            failed=0,
+            successful=len(self.query_results),
+        )
+
 
 class MockCollection:
 
-    def __init__(self, collection_name: str, query_results: Optional[list[Object]] = None):
+    def __init__(
+        self, collection_name: str, query_results: Optional[list[Object]] = None
+    ):
         self.name = collection_name
         self.query_results = query_results if query_results else []
 
@@ -87,7 +123,7 @@ class MockCollection:
     @property
     def tenants(self):
         tenant_name = f"Tenant{self.name}"
-        return MockCollections({tenant_name:self.query_results})
+        return MockCollections({tenant_name: self.query_results})
 
     @property
     def data(self):
@@ -96,6 +132,16 @@ class MockCollection:
     @property
     def aggregate(self):
         return MockAggregate(self.query_results)
+
+    @property
+    def config(self):
+        return MockConfig()
+
+    def exists(self):
+        return True
+
+    def with_tenant(self, tenant_name):
+        return MockCollection(f"{self.name} / {tenant_name}", self.query_results)
 
 
 class MockAggregate:
@@ -118,7 +164,6 @@ class MockAggregate:
         return max(x.properties["hierarchy_level"] for x in self.query_results)
 
 
-
 class MockCollections:
 
     def __init__(self, collections_results: Optional[dict] = None):
@@ -131,6 +176,14 @@ class MockCollections:
 
     def get(self, collection_name: str):
         return self.collections[collection_name]
+
+    def exists(self, some_name: str):
+        return True
+
+    def remove(self, _: list[str]): ...
+
+    def delete(self, _: str): ...
+
 
 class MockWeaviateClient:
 
@@ -168,7 +221,7 @@ def collections_results():
         ),
         metadata=dict(),
         references=None,
-        vector=dict(default=[2.27]*12, low_space=[2.3]*3),
+        vector=dict(default=[2.27] * 12, low_space=[2.3] * 3),
     )
     child = Object(
         collection="SimpleCollection",
@@ -186,9 +239,9 @@ def collections_results():
         ),
         metadata=dict(),
         references=dict(
-            parent=[parent],
+            parent=SearchResults([parent]),
         ),
-        vector=dict(default=[3.14]*12, low_space=[3.1]*3),
+        vector=dict(default=[3.14] * 12, low_space=[3.1] * 3),
     )
     return dict(
         SimpleCollection=[parent, child],
@@ -208,7 +261,7 @@ def chunked_document():
         original_span=(0, 42),
         hierarchy_level=0,
         parent_id=None,
-        embedding=[2.27]*12,
+        embedding=[2.27] * 12,
     )
     child = DocumentChunk(
         chunk_id=str(uuidlib.uuid3(uuidlib.NAMESPACE_OID, "first document")),
@@ -216,7 +269,7 @@ def chunked_document():
         original_span=(0, 42),
         hierarchy_level=1,
         parent_id=parent.chunk_id,
-        embedding=[3.14]*12,
+        embedding=[3.14] * 12,
     )
     return ChunkedDocument(
         filename="some_file.txt",

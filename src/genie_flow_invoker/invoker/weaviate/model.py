@@ -1,8 +1,7 @@
-from typing import Optional, Literal
+from typing import Any, Literal, Optional
 
-from genie_flow_invoker.doc_proc import SimilaritySearchRequest, ChunkedDocument
-from pydantic import Field, BaseModel
-
+from genie_flow_invoker.doc_proc import ChunkedDocument, SimilaritySearchRequest
+from pydantic import BaseModel, Field
 
 WeaviateDistanceMethodType = Literal[
     "cosine", "dot", "l2-squared", "hamming", "manhattan"
@@ -61,3 +60,56 @@ class WeaviatePersistenceResponse(BaseModel):
     nr_replaces: int = Field(
         description="The number of chunks replaced in the collection",
     )
+
+
+class WeaviateDeleteMessage(BaseModel):
+    collection_name: Optional[str] = Field(
+        default=None,
+        description="The collection name to delete the chunked documents from",
+    )
+    tenant_name: Optional[str] = Field(
+        default=None,
+        description="The tenant name to delete the chunked documents from",
+    )
+
+
+class WeaviateDeleteChunksRequest(WeaviateDeleteMessage):
+    chunk_id: Optional[str | list[str]] = Field(
+        default=None,
+        description="The ID or list of IDs of the chunk(s) to delete",
+    )
+
+
+class WeaviateDeleteByFilenameRequest(WeaviateDeleteMessage):
+    filename: str = Field(
+        description="The filename to filter all chunks to delete",
+    )
+
+
+class WeaviateDeleteByFilterRequest(WeaviateDeleteMessage):
+    having_all: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Property filter that all need to match",
+    )
+    having_any: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Property filter that any need to match",
+    )
+
+
+class WeaviateDeleteErrorResponse(WeaviateDeleteMessage):
+    error_code: str = Field(
+        description="The code name of the error",
+    )
+    error: str = Field(
+        description="The error descriptive message",
+    )
+
+    @classmethod
+    def from_exception(cls, exc: Exception) -> "WeaviateDeleteErrorResponse":
+        return cls(
+            collection_name=getattr(exc, "collection_name", None),
+            tenant_name=getattr(exc, "tenant_name", None),
+            error_code=exc.__class__.__name__,
+            error=str(exc),
+        )

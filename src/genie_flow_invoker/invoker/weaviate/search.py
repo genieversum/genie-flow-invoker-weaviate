@@ -1,82 +1,22 @@
 import json
 from abc import ABC, abstractmethod
-from inspect import signature
-from typing import Optional, Any, Callable
-
-from loguru import logger
-from weaviate.collections import Collection
-from weaviate.classes.query import Filter, QueryReference, Metrics
-from weaviate.collections.classes.filters import _Filters
-from weaviate.collections.classes.internal import Object
+from inspect import signature, Parameter
+from typing import Any, Callable, Optional, TypeAlias
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
+from loguru import logger
+from pydantic import TypeAdapter
+
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
+from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
+from genie_flow_invoker.invoker.weaviate.utils import compile_filter
+from weaviate.classes.query import Filter, Metrics, QueryReference
+from weaviate.collections import Collection
+from weaviate.collections.classes.internal import Object
 
 
-def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
-    if " " in key:
-        key_name, indicator = key.rsplit(" ", 1)
-    else:
-        key_name = key
-        indicator = "=="
-    logger.debug(
-        "found indicator {indicator} for property {property} for value {value}",
-        indicator=indicator,
-        property=key_name,
-        value=value,
-    )
-    filter_by_property = Filter.by_property(key_name)
-    match indicator:
-        case "==":
-            return filter_by_property.equal(value)
-        case "!=":
-            return filter_by_property.not_equal(value)
-        case "<":
-            return filter_by_property.less_than(value)
-        case "<=":
-            return filter_by_property.less_or_equal(value)
-        case ">":
-            return filter_by_property.greater_than(value)
-        case ">=":
-            return filter_by_property.greater_or_equal(value)
-        case "@":
-            return filter_by_property.contains_any(value)
-        case _:
-            logger.error(
-                "Invalid indicator '{indicator}' for property {property}",
-                indicator=indicator,
-                property=key_name,
-            )
-            raise ValueError(
-                f"Got filter indicator '{indicator}' that is not supported"
-            )
-
-
-def compile_filter(query_params: dict) -> Optional[Filter]:
-    query_filter = None
-
-    if query_params["having_all"] is not None:
-        logger.debug("building an `all_of' filter")
-        query_filter = Filter.all_of(
-            [
-                _create_attribute_filter(key, value)
-                for key, value in query_params["having_all"].items()
-            ]
-        )
-    if query_params["having_any"] is not None:
-        logger.debug("building an `any_of' filter")
-        any_filter = Filter.any_of(
-            [
-                _create_attribute_filter(key, value)
-                for key, value in query_params["having_any"].items()
-            ]
-        )
-        if query_filter is not None:
-            query_filter = query_filter & any_filter
-        else:
-            query_filter = any_filter
-
-    return query_filter
+ChunkedDocumentList: TypeAlias = list[ChunkedDocument]
+ChunkedDocumentListModel = TypeAdapter(ChunkedDocumentList)
 
 
 def compile_chunked_documents(
@@ -111,8 +51,8 @@ def compile_chunked_documents(
                 properties["original_span_end"],
             ),
             hierarchy_level=properties["hierarchy_level"],
-            parent_id=str(o.references["parent"][0].uuid) if o.references else None,
-            embedding=o.vector[named_vector] if o.vector is not None else None,
+            parent_id=str(o.references["parent"].objects[0].uuid) if o.references else None,
+            embedding=o.vector[named_vector] if o.vector is not None and len(o.vector) > 0 else None,
         )
         logger.debug(
             "created a chunk with id {chunk_id}",
@@ -155,10 +95,16 @@ def _calculate_operation_level(
     return response.properties["hierarchy_level"].maximum + operation_level + 1
 
 
-class AbstractSearcher(ABC):
+class AbstractSearcher(WeaviateClientProcessor, ABC):
 
     def __init__(self, client_factory: WeaviateClientFactory, query_params: dict):
-        self.client_factory = client_factory
+        super().__init__(
+            client_factory,
+            {
+                "collection_name": query_params.get("collection_name", None),
+                "tenant_name": query_params.get("tenant_name", None),
+            },
+        )
 
         def cast_or_none(dictionary: dict, key: str, data_type: type):
             try:
@@ -167,8 +113,6 @@ class AbstractSearcher(ABC):
                 return None
 
         self.base_query_params = dict(
-            collection_name=query_params.get("collection_name", None),
-            tenant_name=query_params.get("tenant_name", None),
             parent_strategy=query_params.get("parent_strategy", None),
             operation_level=query_params.get("operation_level", None),
             having_all=query_params.get("having_all", None),
@@ -215,16 +159,11 @@ class AbstractSearcher(ABC):
             json_kwargs=json.dumps(kwargs),
         )
         query_params = self.base_query_params.copy()
-        query_params.update(**kwargs)
+        for kwarg_k, kwarg_v in kwargs.items():
+            if kwarg_v is not None:
+                query_params[kwarg_k] = kwarg_v
 
-        if query_params.get("collection_name", None) in [None, ""]:
-            logger.error("Missing collection name from query parameters")
-            raise ValueError("Missing collection name from query parameters")
-
-        with self.client_factory as client:
-            collection = client.collections.get(query_params["collection_name"])
-        if query_params.get("tenant_name", None) not in [None, ""]:
-            collection = collection.tenants.get(query_params["tenant_name"])
+        collection = self.get_collection_or_tenant(query_params)
         query_params["collection"] = collection
 
         translations = {
@@ -233,7 +172,8 @@ class AbstractSearcher(ABC):
         }
         for genie_param, weaviate_param in translations.items():
             if genie_param in query_params:
-                query_params[weaviate_param] = query_params[genie_param]
+                if query_params[genie_param] is not None:
+                    query_params[weaviate_param] = query_params[genie_param]
                 del query_params[genie_param]
 
         # if a non-default vector is specified, set the target to it
@@ -248,7 +188,7 @@ class AbstractSearcher(ABC):
 
         # if we need the parents, pull in the references too
         if query_params["parent_strategy"] is not None:
-            query_params["return_references"] = [QueryReference(link_on="parent_id")]
+            query_params["return_references"] = [QueryReference(link_on="parent")]
 
         # if we need to operate at a certain level, filter on that level
         if query_params["operation_level"] is not None:
@@ -289,11 +229,15 @@ class AbstractSearcher(ABC):
         :param kwargs: additional keyword arguments that were passed to the search function
         :return: a list of objects with the parent strategy applied
         """
-        parent_strategy = kwargs.get("parent_strategy", None) or self.base_query_params.get("parent_strategy", None)
+        parent_strategy = kwargs.get(
+            "parent_strategy", None
+        ) or self.base_query_params.get("parent_strategy", None)
         if parent_strategy is None:
             logger.debug("no parent strategy set")
             return query_results
-        logger.debug("parent strategy set to {parent_strategy}", parent_strategy=parent_strategy)
+        logger.debug(
+            "parent strategy set to {parent_strategy}", parent_strategy=parent_strategy
+        )
 
         seen_parents = set()
         if parent_strategy == "replace":
@@ -302,7 +246,7 @@ class AbstractSearcher(ABC):
             for child in query_results:
                 if child.references is None:
                     continue
-                for parent in child.references["parent"]:
+                for parent in child.references["parent"].objects:
                     if parent.uuid not in seen_parents:
                         parents.append(parent)
                         seen_parents.add(parent.uuid)
@@ -358,15 +302,20 @@ class AbstractSearcher(ABC):
         # bind the necessary arguments to the values in query_params
         search_function = self._conduct_search(collection)
         function_signature = signature(search_function)
-        bound_function = function_signature.bind(**query_params)
+        function_params = {
+            k:query_params[k] if k in query_params else param.default
+            for k, param in function_signature.parameters.items()
+        }
+        bound_function = function_signature.bind(**function_params)
 
         # conduct the search and apply the parent strategy
         logger.debug(
-            "using search function {function_name} with parameters {parameters}",
+            "using search function '{function_name}' with parameters {function_params}",
             function_name=search_function.__name__,
-            parameters=bound_function.arguments.keys(),
+            function_params=function_params,
+            **function_params,
         )
-        query_results = search_function(**bound_function.arguments)
+        query_results = search_function(**bound_function.arguments).objects
         query_results = self.apply_parent_strategy(query_results, **query_params)
 
         # compile the list of chunked documents and return it

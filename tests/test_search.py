@@ -1,16 +1,25 @@
 import uuid
 
 from genie_flow_invoker.invoker.weaviate import SimilaritySearcher
-from weaviate.collections.classes.filters import _FilterAnd, _FilterOr, _FilterValue, _Operator
+from weaviate.collections.classes.filters import (
+    _FilterAnd,
+    _FilterOr,
+    _FilterValue,
+    _Operator,
+)
 
 
 def test_similarity_query_params_query(weaviate_client_factory):
-    searcher = SimilaritySearcher(weaviate_client_factory, dict(collection_name="SimpleCollection"))
+    searcher = SimilaritySearcher(
+        weaviate_client_factory, dict(collection_name="SimpleCollection")
+    )
     query_params = searcher.create_query_params("my query")
 
     assert query_params["query"] == "my query"
-    assert query_params["collection"].query_results == \
-           weaviate_client_factory.collections_results["SimpleCollection"]
+    assert (
+        query_params["collection"].query_results
+        == weaviate_client_factory.collections_results["SimpleCollection"]
+    )
     assert query_params["target_vector"] == "default"
     assert query_params["include_vector"] == False
     assert query_params["method"] == "cosine"
@@ -22,13 +31,15 @@ def test_similarity_query_params_target_vector(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             vector_name="some_other_vector",
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
 
     assert query_params["query"] == "my query"
-    assert query_params["collection"].query_results == \
-           weaviate_client_factory.collections_results["SimpleCollection"]
+    assert (
+        query_params["collection"].query_results
+        == weaviate_client_factory.collections_results["SimpleCollection"]
+    )
     assert query_params["target_vector"] == "some_other_vector"
     assert query_params["include_vector"] == False
     assert query_params["method"] == "cosine"
@@ -40,13 +51,15 @@ def test_similarity_query_params_include_vector(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             include_vector=True,
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
 
     assert query_params["query"] == "my query"
-    assert query_params["collection"].query_results == \
-           weaviate_client_factory.collections_results["SimpleCollection"]
+    assert (
+        query_params["collection"].query_results
+        == weaviate_client_factory.collections_results["SimpleCollection"]
+    )
     assert query_params["target_vector"] == "default"
     assert query_params["include_vector"] == True
     assert query_params["method"] == "cosine"
@@ -58,13 +71,15 @@ def test_similarity_query_params_method(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             method="manhattan",
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
 
     assert query_params["query"] == "my query"
-    assert query_params["collection"].query_results == \
-           weaviate_client_factory.collections_results["SimpleCollection"]
+    assert (
+        query_params["collection"].query_results
+        == weaviate_client_factory.collections_results["SimpleCollection"]
+    )
     assert query_params["target_vector"] == "default"
     assert query_params["include_vector"] == False
     assert query_params["method"] == "manhattan"
@@ -76,14 +91,18 @@ def test_similarity_query_params_tenant(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             tenant_name="TenantSimpleCollection",
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
 
     assert query_params["query"] == "my query"
-    assert query_params["collection"].query_results == \
-           weaviate_client_factory.collections_results["SimpleCollection"]
-    assert query_params["collection"].name == "TenantSimpleCollection"
+    assert (
+        query_params["collection"].query_results
+        == weaviate_client_factory.collections_results["SimpleCollection"]
+    )
+    assert (
+        query_params["collection"].name == "SimpleCollection / TenantSimpleCollection"
+    )
     assert query_params["target_vector"] == "default"
     assert query_params["include_vector"] == False
     assert query_params["method"] == "cosine"
@@ -95,7 +114,7 @@ def test_similarity_query_params_extra(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             some_extra_param="some_extra_value",
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
     assert "some_extra_param" not in query_params
@@ -108,7 +127,7 @@ def test_similarity_query_params_top_horizon(weaviate_client_factory):
             collection_name="SimpleCollection",
             top=16,
             horizon=0.7,
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
 
@@ -122,12 +141,12 @@ def test_similarity_query_params_parent(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             parent_strategy="replace",
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
 
     assert len(query_params["return_references"]) == 1
-    assert query_params["return_references"][0].link_on == "parent_id"
+    assert query_params["return_references"][0].link_on == "parent"
 
 
 def test_similarity_query_params_has_all(weaviate_client_factory):
@@ -136,7 +155,7 @@ def test_similarity_query_params_has_all(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             having_all={"some_property": 42, "other_property <": 0},
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
     assert type(query_params["filter"]) == _FilterAnd
@@ -155,7 +174,7 @@ def test_similarity_query_params_has_any(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             having_all={"some_property": 42, "other_property <": 0},
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
     assert type(query_params["filter"]) == _FilterAnd
@@ -175,7 +194,7 @@ def test_similarity_query_params_has_all_and_any(weaviate_client_factory):
             collection_name="SimpleCollection",
             having_all={"some_property": 42, "other_property <": 0},
             having_any={"third_property": 24, "other_property >=": -99},
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
     assert type(query_params["filter"]) == _FilterAnd
@@ -190,7 +209,7 @@ def test_similarity_query_params_level(weaviate_client_factory):
         dict(
             collection_name="SimpleCollection",
             operation_level=2,
-        )
+        ),
     )
     query_params = searcher.create_query_params("my query")
     assert type(query_params["filter"]) == _FilterValue
@@ -204,7 +223,7 @@ def test_similarity_search(weaviate_client_factory):
         weaviate_client_factory,
         dict(
             collection_name="SimpleCollection",
-        )
+        ),
     )
     results = searcher.search(query_text="my query")
     assert len(results) == 1

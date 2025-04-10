@@ -1,6 +1,9 @@
 from conftest import MockQuery
-from genie_flow_invoker.invoker.weaviate import WeaviatePersistInvoker, WeaviatePersistenceResponse, \
-    WeaviatePersistenceRequest
+from genie_flow_invoker.invoker.weaviate import (
+    WeaviatePersistInvoker,
+    WeaviatePersistenceResponse,
+    WeaviatePersistenceRequest,
+)
 
 
 def test_persist_invocation(weaviate_client_factory, chunked_document):
