@@ -8,6 +8,8 @@ from weaviate.collections.classes.filters import (
     _Operator,
 )
 
+from genie_flow_invoker.invoker.weaviate.properties import create_flat_name
+
 
 def test_similarity_query_params_query(weaviate_client_factory):
     searcher = SimilaritySearcher(
@@ -162,10 +164,10 @@ def test_similarity_query_params_has_all(weaviate_client_factory):
     assert len(query_params["filter"].filters) == 2
     assert query_params["filter"].filters[0].value == 42
     assert query_params["filter"].filters[0].operator == _Operator.EQUAL
-    assert query_params["filter"].filters[0].target == "some_property"
+    assert query_params["filter"].filters[0].target == create_flat_name("some_property")
     assert query_params["filter"].filters[1].value == 0
     assert query_params["filter"].filters[1].operator == _Operator.LESS_THAN
-    assert query_params["filter"].filters[1].target == "other_property"
+    assert query_params["filter"].filters[1].target == create_flat_name("other_property")
 
 
 def test_similarity_query_params_has_any(weaviate_client_factory):
@@ -181,10 +183,10 @@ def test_similarity_query_params_has_any(weaviate_client_factory):
     assert len(query_params["filter"].filters) == 2
     assert query_params["filter"].filters[0].value == 42
     assert query_params["filter"].filters[0].operator == _Operator.EQUAL
-    assert query_params["filter"].filters[0].target == "some_property"
+    assert query_params["filter"].filters[0].target == create_flat_name("some_property")
     assert query_params["filter"].filters[1].value == 0
     assert query_params["filter"].filters[1].operator == _Operator.LESS_THAN
-    assert query_params["filter"].filters[1].target == "other_property"
+    assert query_params["filter"].filters[1].target == create_flat_name("other_property")
 
 
 def test_similarity_query_params_has_all_and_any(weaviate_client_factory):

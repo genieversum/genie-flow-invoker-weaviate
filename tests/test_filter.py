@@ -1,3 +1,4 @@
+from genie_flow_invoker.invoker.weaviate.properties import create_flat_name
 from genie_flow_invoker.invoker.weaviate.utils import compile_filter
 from weaviate.collections.classes.filters import (
     Filter,
@@ -36,14 +37,14 @@ def test_filter_all():
         for f in weaviate_filter.filters
     ]
     assert filters == [
-        [_Operator.EQUAL, "equal_attr", 12],
-        [_Operator.EQUAL, "equal_attr2", 12],
-        [_Operator.NOT_EQUAL, "not_equal_attr", 0],
-        [_Operator.LESS_THAN, "less_attr", "zeus"],
-        [_Operator.LESS_THAN_EQUAL, "less_equal_attr", "zeus"],
-        [_Operator.GREATER_THAN, "greater_attr", "apollo"],
-        [_Operator.GREATER_THAN_EQUAL, "greater_equal_attr", "apollo"],
-        [_Operator.CONTAINS_ANY, "in_attr", "Dionysus"],
+        [_Operator.EQUAL, create_flat_name("equal_attr"), 12],
+        [_Operator.EQUAL, create_flat_name("equal_attr2"), 12],
+        [_Operator.NOT_EQUAL, create_flat_name("not_equal_attr"), 0],
+        [_Operator.LESS_THAN, create_flat_name("less_attr"), "zeus"],
+        [_Operator.LESS_THAN_EQUAL, create_flat_name("less_equal_attr"), "zeus"],
+        [_Operator.GREATER_THAN, create_flat_name("greater_attr"), "apollo"],
+        [_Operator.GREATER_THAN_EQUAL, create_flat_name("greater_equal_attr"), "apollo"],
+        [_Operator.CONTAINS_ANY, create_flat_name("in_attr"), "Dionysus"],
     ]
 
 
@@ -70,14 +71,14 @@ def test_filter_any():
         for f in weaviate_filter.filters
     ]
     assert filters == [
-        [_Operator.EQUAL, "equal_attr", 12],
-        [_Operator.EQUAL, "equal_attr2", 12],
-        [_Operator.NOT_EQUAL, "not_equal_attr", 0],
-        [_Operator.LESS_THAN, "less_attr", "zeus"],
-        [_Operator.LESS_THAN_EQUAL, "less_equal_attr", "zeus"],
-        [_Operator.GREATER_THAN, "greater_attr", "apollo"],
-        [_Operator.GREATER_THAN_EQUAL, "greater_equal_attr", "apollo"],
-        [_Operator.CONTAINS_ANY, "in_attr", "Dionysus"],
+        [_Operator.EQUAL, create_flat_name("equal_attr"), 12],
+        [_Operator.EQUAL, create_flat_name("equal_attr2"), 12],
+        [_Operator.NOT_EQUAL, create_flat_name("not_equal_attr"), 0],
+        [_Operator.LESS_THAN, create_flat_name("less_attr"), "zeus"],
+        [_Operator.LESS_THAN_EQUAL, create_flat_name("less_equal_attr"), "zeus"],
+        [_Operator.GREATER_THAN, create_flat_name("greater_attr"), "apollo"],
+        [_Operator.GREATER_THAN_EQUAL, create_flat_name("greater_equal_attr"), "apollo"],
+        [_Operator.CONTAINS_ANY, create_flat_name("in_attr"), "Dionysus"],
     ]
 
 
@@ -103,9 +104,16 @@ def test_filter_all_any():
     assert len(weaviate_filter.filters[0].filters) == 3
     assert len(weaviate_filter.filters[1].filters) == 2
     for leaf_filter in weaviate_filter.filters[0].filters:
-        assert "all" in leaf_filter.target
+        assert leaf_filter.target in {
+            create_flat_name("first_all_attr"),
+            create_flat_name("second_all_attr"),
+            create_flat_name("third_all_attr"),
+        }
     for leaf_filter in weaviate_filter.filters[1].filters:
-        assert "any" in leaf_filter.target
+        assert leaf_filter.target in {
+            create_flat_name("first_any_attr"),
+            create_flat_name("second_any_attr"),
+        }
 
 
 def test_filter_space_separator():
@@ -114,6 +122,6 @@ def test_filter_space_separator():
 
     assert weaviate_filter is not None
     assert isinstance(weaviate_filter, _FilterValue)
-    assert weaviate_filter.target == "a space separated   attribute"
+    assert weaviate_filter.target == create_flat_name("a space separated   attribute")
     assert weaviate_filter.operator == _Operator.NOT_EQUAL
     assert weaviate_filter.value == 0
