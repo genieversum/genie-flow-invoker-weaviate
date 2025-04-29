@@ -83,7 +83,17 @@ To filter for given values in properties can be done by adding a "having" attrib
 can be either `having_all` or `having_any`, where the former will only retrieve chunks that
 have _all_ matching properties and the latter where the chunk matches any property.
 
-If both having_all and having_any are specified, they are both applied in and AND fashion:
+Every chunk stores two sets of properties: the document metadata and the custom properties.
+The document metadata are stored in the `ChunkedDocument` that a chunk belongs to. The
+custom properties are defined in the `DocumentChunk` in the property `custom_properties` as
+a (potentially nested) dictionary.
+
+Referring to a property is done using a dot-separated path, starting with either
+"document_metadata" or "custom_property". So, to address a document metadata property
+called "language", the property to filter by `document_metadata.language`. A custom property
+of a chunk, called "age", would be address using `custom_property.age`.
+
+If both `having_all` and `having_any` are specified, they are both applied in an AND-fashion:
 the only chunks that match all the attributes specified by `having_all` as well as having
 any matches specified by `having_any` will be returned.
 

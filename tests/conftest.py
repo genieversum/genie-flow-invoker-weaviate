@@ -8,6 +8,7 @@ from pytest import fixture
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
 
+from genie_flow_invoker.invoker.weaviate.properties import create_flat_name
 
 SearchResults = namedtuple("SearchResults", ["objects"])
 
@@ -205,6 +206,14 @@ class MockWeaviateClientFactory:
 
 @fixture
 def collections_results():
+    flat_properties = {
+        create_flat_name("document_metadata.language"): "en",
+        create_flat_name("document_metadata.source"): "pdf",
+    }
+    flat_property_map = {
+        create_flat_name(path): path
+        for path in ["document_metadata.language", "document_metadata.source"]
+    }
     parent = Object(
         collection="SimpleCollection",
         uuid=uuidlib.uuid3(uuidlib.NAMESPACE_OID, "second document"),
@@ -214,10 +223,8 @@ def collections_results():
             original_span_start=0,
             original_span_end=42,
             hierarchy_level=0,
-            document_metadata=dict(
-                language="en",
-                source="pdf",
-            ),
+            property_map=flat_property_map,
+            **flat_properties,
         ),
         metadata=dict(),
         references=None,
@@ -232,10 +239,8 @@ def collections_results():
             original_span_start=0,
             original_span_end=42,
             hierarchy_level=1,
-            document_metadata=dict(
-                language="en",
-                source="pdf",
-            ),
+            property_map=flat_property_map,
+            **flat_properties,
         ),
         metadata=dict(),
         references=dict(

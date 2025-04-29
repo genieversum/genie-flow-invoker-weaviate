@@ -28,6 +28,7 @@ from genie_flow_invoker.invoker.weaviate.exceptions import (
     NoTenantProvided,
     NoCollectionProvided,
 )
+from genie_flow_invoker.invoker.weaviate.properties import create_flat_name
 
 
 def test_delete_by_id(weaviate_client_factory, monkeypatch):
@@ -125,7 +126,7 @@ def test_delete_by_filter(weaviate_client_factory, monkeypatch):
     all_filter = recorder.recording[0][1]["where"]
     assert len(all_filter.filters) == 2
     assert all_filter.filters[0].operator == _Operator.EQUAL
-    assert all_filter.filters[1].target == "second_all"
+    assert all_filter.filters[1].target == create_flat_name("second_all")
 
 
 def test_delete_failed_filter(weaviate_client_factory):

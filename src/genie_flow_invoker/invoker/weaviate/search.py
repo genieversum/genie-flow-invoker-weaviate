@@ -9,6 +9,7 @@ from pydantic import TypeAdapter
 
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
+from genie_flow_invoker.invoker.weaviate.properties import unmap_properties
 from genie_flow_invoker.invoker.weaviate.utils import compile_filter
 from weaviate.classes.query import Filter, Metrics, QueryReference
 from weaviate.collections import Collection
@@ -42,7 +43,9 @@ def compile_chunked_documents(
         nr_chunks=len(query_results),
     )
     for o in query_results:
-        properties = o.properties
+        properties: dict[str, Any] = o.properties
+        property_map = properties.get("property_map", {})
+        unflattened_properties = unmap_properties(properties, property_map)
         chunk = DocumentChunk(
             chunk_id=str(o.uuid),
             content=properties["content"],
@@ -51,6 +54,7 @@ def compile_chunked_documents(
                 properties["original_span_end"],
             ),
             hierarchy_level=properties["hierarchy_level"],
+            custom_properties=unflattened_properties.get("custom_properties", {}),
             parent_id=str(o.references["parent"].objects[0].uuid) if o.references else None,
             embedding=o.vector[named_vector] if o.vector is not None and len(o.vector) > 0 else None,
         )
@@ -68,7 +72,7 @@ def compile_chunked_documents(
             )
             document_index[filename] = ChunkedDocument(
                 filename=filename,
-                document_metadata=properties["document_metadata"],
+                document_metadata=unflattened_properties.get("document_metadata", {}),
                 chunks=[chunk],
             )
     logger.debug(

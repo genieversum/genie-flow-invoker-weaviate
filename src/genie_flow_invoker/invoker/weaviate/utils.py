@@ -4,6 +4,8 @@ from loguru import logger
 
 from weaviate.collections.classes.filters import Filter, _Filters
 
+from genie_flow_invoker.invoker.weaviate.properties import create_flat_name
+
 
 def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
     if " " in key:
@@ -17,7 +19,8 @@ def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
         property=key_name,
         value=value,
     )
-    filter_by_property = Filter.by_property(key_name.strip())
+    flat_key = create_flat_name(key_name.strip())
+    filter_by_property = Filter.by_property(flat_key)
     match indicator.strip():
         case "==":
             return filter_by_property.equal(value)

@@ -2,11 +2,11 @@ import re
 from collections import defaultdict
 from typing import Optional, Any
 
-from genie_flow_invoker.doc_proc import ChunkedDocument
+from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
 from loguru import logger
 from weaviate.exceptions import UnexpectedStatusCodeError
 
-from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
+from .base import WeaviateClientProcessor
 from weaviate.classes.config import (
     Configure,
     DataType,
@@ -14,6 +14,8 @@ from weaviate.classes.config import (
     ReferenceProperty,
 )
 from weaviate.collections import Collection
+
+from .properties import flatten_properties
 
 
 def _compile_properties(params: dict):
@@ -36,7 +38,7 @@ def _compile_properties(params: dict):
         Property(name="original_span_start", data_type=DataType.INT),
         Property(name="original_span_end", data_type=DataType.INT),
         Property(name="hierarchy_level", data_type=DataType.INT),
-        Property(name="document_metadata", data_type=DataType.OBJECT),
+        Property(name="property_map", data_type=DataType.OBJECT),
         *extra_properties,
     ]
 
@@ -107,32 +109,24 @@ def _compile_cross_references(params: dict):
     ]
 
 
-_METADATA_FIRST_CHAR = re.compile("[_A-Za-z]")
-_METADATA_REMAINING_CHARS = re.compile("[_0-9A-Za-z]")
-def _clean_metadata_key(key: str) -> str:
-    if len(key) == 0:
-        logger.error("Metadata contains empty key")
-        raise ValueError("Metadata contains empty key")
+def _build_properties(document: ChunkedDocument, chunk: DocumentChunk) -> dict[str, Any]:
 
-    result = key[0] if _METADATA_FIRST_CHAR.match(key[0]) else "_"
-    for c in key[1:]:
-        result += c if _METADATA_REMAINING_CHARS.match(c) else "_"
-    return result
-
-
-def clean_nested_metadata_properties(metadata: Any) -> Any:
-    if isinstance(metadata, dict):
-        return {
-            _clean_metadata_key(k): clean_nested_metadata_properties(v)
-            for k, v in metadata.items()
-        }
-    if isinstance(metadata, list):
-        return [clean_nested_metadata_properties(e) for e in metadata]
-    if isinstance(metadata, tuple):
-        return (clean_nested_metadata_properties(e) for e in metadata)
-    if isinstance(metadata, set):
-        return {clean_nested_metadata_properties(e) for e in metadata}
-    return metadata
+    props: dict[str, Any] = {
+        "filename": document.filename,
+        "content": chunk.content,
+        "original_span_start": chunk.original_span[0],
+        "original_span_end": chunk.original_span[1],
+        "hierarchy_level": chunk.hierarchy_level,
+    }
+    properties_to_flatten = {
+        "document_metadata": document.document_metadata,
+        "custom_properties": chunk.custom_properties,
+    }
+    flats = flatten_properties(properties_to_flatten)
+    for prop in flats:
+        props[prop.flat_name] = prop.value
+    props["property_map"] = {prop.flat_name: prop.path for prop in flats}
+    return props
 
 
 class WeaviatePersistor(WeaviateClientProcessor):
@@ -214,7 +208,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
             collection_name, tenant_name
         )
 
-        chunk_index = defaultdict(list)
+        chunk_index: dict[int, list[DocumentChunk]] = defaultdict(list)
         for chunk in document.chunks:
             chunk_index[chunk.hierarchy_level].append(chunk)
 
@@ -262,21 +256,16 @@ class WeaviatePersistor(WeaviateClientProcessor):
         # making sure we add the chunks from top to bottom
         nr_inserted = 0
         nr_replaced = 0
-        for hierarchy_level, chunks in chunk_index.items():
+        hierarchy_levels = sorted(chunk_index.keys())
+        for hierarchy_level in hierarchy_levels:
+            chunks = chunk_index[hierarchy_level]
             logger.debug(
                 "persisting {nr_chunks} chunk(s) at hierarchy level {hierarchy_level}",
                 nr_chunks=len(chunks),
                 hierarchy_level=hierarchy_level,
             )
             for chunk in chunks:
-                properties = {
-                    "filename": document.filename,
-                    "content": chunk.content,
-                    "original_span_start": chunk.original_span[0],
-                    "original_span_end": chunk.original_span[1],
-                    "hierarchy_level": chunk.hierarchy_level,
-                    "document_metadata": clean_nested_metadata_properties(document.document_metadata),   #TODO move outside loop
-                }
+                properties = _build_properties(document, chunk)
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
                 vector = {vector_name: chunk.embedding} if chunk.embedding else None
 
