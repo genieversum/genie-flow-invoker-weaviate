@@ -38,7 +38,6 @@ def _compile_properties(params: dict):
         Property(name="original_span_start", data_type=DataType.INT),
         Property(name="original_span_end", data_type=DataType.INT),
         Property(name="hierarchy_level", data_type=DataType.INT),
-        Property(name="property_map", data_type=DataType.OBJECT),
         *extra_properties,
     ]
 
@@ -143,17 +142,23 @@ class WeaviatePersistor(WeaviateClientProcessor):
         :param persist_params: the configuration parameters to create the collection with
         :return: the newly created collection
         """
+        params = {
+            "collection_name": self.base_params.collection_name,
+            "tenant_name": self.base_params.tenant_name,
+        }
+        params.update(persist_params)
+
         collection_name, _ = self.compile_collection_tenant_names(
-            persist_params.get("collection_name", None),
+            params.get("collection_name", None),
         )
 
         with self.client_factory as client:
             try:
                 return client.collections.create(
                     name=collection_name,
-                    properties=_compile_properties(persist_params),
-                    multi_tenancy_config=_compile_multi_tenancy(persist_params),
-                    references=_compile_cross_references(persist_params),
+                    properties=_compile_properties(params.get("properties", {})),
+                    multi_tenancy_config=_compile_multi_tenancy(params),
+                    references=_compile_cross_references(params),
                 )
             except UnexpectedStatusCodeError as e:
                 logger.error(
