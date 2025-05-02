@@ -38,7 +38,6 @@ def _compile_properties(params: dict):
         Property(name="original_span_start", data_type=DataType.INT),
         Property(name="original_span_end", data_type=DataType.INT),
         Property(name="hierarchy_level", data_type=DataType.INT),
-        # Property(name="property_map", data_type=DataType.OBJECT),
         *extra_properties,
     ]
 
