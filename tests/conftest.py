@@ -4,6 +4,8 @@ from typing import Optional, Any
 
 from weaviate.collections.classes.internal import Object
 from weaviate.collections.classes.batch import DeleteManyReturn
+from weaviate.collections.classes.filters import _FilterAnd, _Operator, _FilterOr, Filter, \
+    _FilterByProperty, _Filters, _FilterValue
 from pytest import fixture
 
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
@@ -45,8 +47,48 @@ class MockQuery:
     def near_text(self, **kwargs):
         return SearchResults(self.query_results)
 
-    def near_vector(self, **kwargs):
-        return SearchResults(self.query_results)
+    def _mock_filter_all(self, o: Object, filters: list) -> bool:
+        return all(f(o) for f in filters)
+
+    def _mock_filter_any(self, o: Object, filters: list) -> bool:
+        return any(f(o) for f in filters)
+
+    def _mock_filter_by_property(self, o: Object, property: str, value: Any) -> bool:
+        return o.properties[property] == value
+
+    def _mock_filter(self, o: Object, filters: _Filters) -> bool:
+        if isinstance(filters, _FilterAnd):
+            return all(
+                [self._mock_filter(o, child) for child in filters.filters],
+            )
+        if isinstance(filters, _FilterOr):
+            return any(
+                [self._mock_filter(o, child) for child in filters.filters],
+            )
+        if isinstance(filters, _FilterValue):
+            if filters.target not in o.properties:
+                return False
+            value = o.properties[filters.target]
+            match filters.operator:
+                case _Operator.EQUAL:
+                    return value == filters.value
+                case _Operator.GREATER_THAN_EQUAL:
+                    return value >= filters.value
+                case _:
+                    raise ValueError(f"Operator {filters.operator} not implementsd yet")
+        return False
+
+    def near_vector(self, near_vector, filters):
+        if filters:
+            results = [
+                result
+                for result in self.query_results
+                if self._mock_filter(result, filters)
+            ]
+        else:
+            results = self.query_results
+
+        return SearchResults(results)
 
     def hybrid(self, **kwargs):
         return self.query_results
@@ -229,6 +271,12 @@ def collections_results():
         metadata=dict(),
         references=None,
         vector=dict(default=[2.27] * 12, low_space=[2.3] * 3),
+    )
+    flat_properties.update(
+        {create_flat_name("custom_property.some_property"): "this is a custom property"}
+    )
+    flat_property_map.update(
+        {create_flat_name("custom_property.some_property"): "custom_property.some_property"}
     )
     child = Object(
         collection="SimpleCollection",

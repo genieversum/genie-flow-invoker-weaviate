@@ -51,3 +51,53 @@ def test_request_search_invoke(weaviate_client_factory):
     assert len(result) == 1
     assert len(result[0].chunks) == 1
     assert result[0].chunks[0].content == "Hello Parent"
+
+
+def test_request_search_filter_invoke(weaviate_client_factory):
+    invoker = WeaviateSimilaritySearchRequestInvoker(weaviate_client_factory, dict())
+    search_request = WeaviateSimilaritySearchRequest(
+        filename="some_file.txt",
+        collection_name="SimpleCollection",
+        having_any={
+            "custom_property.some_property": "this is a custom property",
+        },
+        query_embedding=[2.27] * 12,
+    )
+    result_json = invoker.invoke(search_request.model_dump_json())
+    result = [ChunkedDocument.model_validate(r) for r in json.loads(result_json)]
+    assert len(result) == 1
+    assert len(result[0].chunks) == 1
+    assert result[0].chunks[0].content == "Hello World"
+
+
+def test_request_search_filter_any_invoke(weaviate_client_factory):
+    invoker = WeaviateSimilaritySearchRequestInvoker(weaviate_client_factory, dict())
+    search_request = WeaviateSimilaritySearchRequest(
+        filename="some_file.txt",
+        collection_name="SimpleCollection",
+        having_any={
+            "custom_property.some_property": "this is a custom property",
+            "document_metadata.source": "pdf",
+        },
+        query_embedding=[2.27] * 12,
+    )
+    result_json = invoker.invoke(search_request.model_dump_json())
+    result = [ChunkedDocument.model_validate(r) for r in json.loads(result_json)]
+    assert len(result) == 1
+    assert len(result[0].chunks) == 2
+
+
+def test_request_search_filter_all_invoke(weaviate_client_factory):
+    invoker = WeaviateSimilaritySearchRequestInvoker(weaviate_client_factory, dict())
+    search_request = WeaviateSimilaritySearchRequest(
+        filename="some_file.txt",
+        collection_name="SimpleCollection",
+        having_all={
+            "custom_property.some_property": "this is a custom property",
+            "document_metadata.language": "nl",
+        },
+        query_embedding=[2.27] * 12,
+    )
+    result_json = invoker.invoke(search_request.model_dump_json())
+    result = [ChunkedDocument.model_validate(r) for r in json.loads(result_json)]
+    assert len(result) == 0

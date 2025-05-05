@@ -13,6 +13,14 @@ class WeaviateSimilaritySearchRequest(SimilaritySearchRequest):
         default="cosine",
         description="Weaviate similarity distance metric",
     )
+    having_all: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Property filter that all need to match",
+    )
+    having_any: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Property filter that any need to match",
+    )
     auto_limit: Optional[int] = Field(
         default=None,
         description="The number of auto-cut similarity search results groups",
