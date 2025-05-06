@@ -160,14 +160,14 @@ def test_similarity_query_params_has_all(weaviate_client_factory):
         ),
     )
     query_params = searcher.create_query_params("my query")
-    assert type(query_params["filter"]) == _FilterAnd
-    assert len(query_params["filter"].filters) == 2
-    assert query_params["filter"].filters[0].value == 42
-    assert query_params["filter"].filters[0].operator == _Operator.EQUAL
-    assert query_params["filter"].filters[0].target == create_flat_name("some_property")
-    assert query_params["filter"].filters[1].value == 0
-    assert query_params["filter"].filters[1].operator == _Operator.LESS_THAN
-    assert query_params["filter"].filters[1].target == create_flat_name("other_property")
+    assert type(query_params["filters"]) == _FilterAnd
+    assert len(query_params["filters"].filters) == 2
+    assert query_params["filters"].filters[0].value == 42
+    assert query_params["filters"].filters[0].operator == _Operator.EQUAL
+    assert query_params["filters"].filters[0].target == create_flat_name("some_property")
+    assert query_params["filters"].filters[1].value == 0
+    assert query_params["filters"].filters[1].operator == _Operator.LESS_THAN
+    assert query_params["filters"].filters[1].target == create_flat_name("other_property")
 
 
 def test_similarity_query_params_has_any(weaviate_client_factory):
@@ -179,14 +179,14 @@ def test_similarity_query_params_has_any(weaviate_client_factory):
         ),
     )
     query_params = searcher.create_query_params("my query")
-    assert type(query_params["filter"]) == _FilterAnd
-    assert len(query_params["filter"].filters) == 2
-    assert query_params["filter"].filters[0].value == 42
-    assert query_params["filter"].filters[0].operator == _Operator.EQUAL
-    assert query_params["filter"].filters[0].target == create_flat_name("some_property")
-    assert query_params["filter"].filters[1].value == 0
-    assert query_params["filter"].filters[1].operator == _Operator.LESS_THAN
-    assert query_params["filter"].filters[1].target == create_flat_name("other_property")
+    assert type(query_params["filters"]) == _FilterAnd
+    assert len(query_params["filters"].filters) == 2
+    assert query_params["filters"].filters[0].value == 42
+    assert query_params["filters"].filters[0].operator == _Operator.EQUAL
+    assert query_params["filters"].filters[0].target == create_flat_name("some_property")
+    assert query_params["filters"].filters[1].value == 0
+    assert query_params["filters"].filters[1].operator == _Operator.LESS_THAN
+    assert query_params["filters"].filters[1].target == create_flat_name("other_property")
 
 
 def test_similarity_query_params_has_all_and_any(weaviate_client_factory):
@@ -199,10 +199,10 @@ def test_similarity_query_params_has_all_and_any(weaviate_client_factory):
         ),
     )
     query_params = searcher.create_query_params("my query")
-    assert type(query_params["filter"]) == _FilterAnd
-    assert len(query_params["filter"].filters) == 2
-    assert type(query_params["filter"].filters[0]) == _FilterAnd
-    assert type(query_params["filter"].filters[1]) == _FilterOr
+    assert type(query_params["filters"]) == _FilterAnd
+    assert len(query_params["filters"].filters) == 2
+    assert type(query_params["filters"].filters[0]) == _FilterAnd
+    assert type(query_params["filters"].filters[1]) == _FilterOr
 
 
 def test_similarity_query_params_level(weaviate_client_factory):
@@ -214,10 +214,10 @@ def test_similarity_query_params_level(weaviate_client_factory):
         ),
     )
     query_params = searcher.create_query_params("my query")
-    assert type(query_params["filter"]) == _FilterValue
-    assert query_params["filter"].value == 2
-    assert query_params["filter"].operator == _Operator.EQUAL
-    assert query_params["filter"].target == "hierarchy_level"
+    assert type(query_params["filters"]) == _FilterValue
+    assert query_params["filters"].value == 2
+    assert query_params["filters"].operator == _Operator.EQUAL
+    assert query_params["filters"].target == "hierarchy_level"
 
 
 def test_similarity_search(weaviate_client_factory):

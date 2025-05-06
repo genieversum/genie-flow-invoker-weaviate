@@ -188,7 +188,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         )
 
         # if we have a filter, include that into the query parameters
-        query_params["filter"] = compile_filter(query_params)
+        query_params["filters"] = compile_filter(query_params)
 
         # if we need the parents, pull in the references too
         if query_params["parent_strategy"] is not None:
@@ -204,10 +204,10 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
             hierarchy_filter = Filter.by_property("hierarchy_level").equal(
                 operation_level
             )
-            if query_params["filter"] is not None:
-                query_params["filter"] &= hierarchy_filter
+            if query_params["filters"] is not None:
+                query_params["filters"] &= hierarchy_filter
             else:
-                query_params["filter"] = hierarchy_filter
+                query_params["filters"] = hierarchy_filter
 
         logger.debug(
             "created query parameters for keys: {param_keys}",
@@ -297,7 +297,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         :return: a list of ChunkedDocuments containing the found chunks
         """
         query_params = self.create_query_params(**kwargs)
-        collection = query_params["collection"]
+        collection = self.get_collection_or_tenant(query_params)
         logger.info(
             "conducting search on collection {collection_name}",
             collection_name=collection.name,
