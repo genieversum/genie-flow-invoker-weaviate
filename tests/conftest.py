@@ -75,7 +75,9 @@ class MockQuery:
                 case _Operator.GREATER_THAN_EQUAL:
                     return value >= filters.value
                 case _:
-                    raise ValueError(f"Operator {filters.operator} not implementsd yet")
+                    raise NotImplementedError(
+                        f"Operator {filters.operator} not implemented in Mock yet"
+                    )
         return False
 
     def near_vector(self, near_vector, filters):
