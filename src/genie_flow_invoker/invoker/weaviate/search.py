@@ -176,7 +176,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         :return: a dictionary of query parameters to be used
         """
         logger.debug(
-            "creating query parameters using kwargs {json_kwargs}",
+            "creating query parameters using kwargs {kwargs}",
             kwargs=str(kwargs),
         )
         query_params = self.base_query_params.copy()
