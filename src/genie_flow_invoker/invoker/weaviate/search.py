@@ -214,12 +214,8 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         if query_params["operation_level"] is not None:
             operation_level = query_params["operation_level"]
             if operation_level < 0:
-                operation_level = _calculate_operation_level(
-                    collection, operation_level
-                )
-            hierarchy_filter = Filter.by_property("hierarchy_level").equal(
-                operation_level
-            )
+                operation_level = _calculate_operation_level(collection, operation_level)
+            hierarchy_filter = Filter.by_property("hierarchy_level").equal(operation_level)
             if query_params["filters"] is not None:
                 query_params["filters"] &= hierarchy_filter
             else:
