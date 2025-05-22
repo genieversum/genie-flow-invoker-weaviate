@@ -72,7 +72,7 @@ class WeaviateClientFactory:
 
     def __enter__(self):
         if self._client is None or not self._client.is_live():
-            logger.debug("No live weaviate client, creating a new one")
+            logger.info("No live weaviate client, creating a new one")
             if self._client is not None:
                 self._client.close()
             self._client = weaviate.connect_to_custom(

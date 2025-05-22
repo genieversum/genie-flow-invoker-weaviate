@@ -1,4 +1,3 @@
-import json
 from abc import ABC, abstractmethod
 from inspect import signature, Parameter
 from typing import Any, Callable, Optional, TypeAlias
@@ -6,6 +5,7 @@ from typing import Any, Callable, Optional, TypeAlias
 from genie_flow_invoker.doc_proc import ChunkedDocument, DocumentChunk
 from loguru import logger
 from pydantic import TypeAdapter
+from weaviate.collections.classes.aggregate import AggregateReturn
 
 from genie_flow_invoker.invoker.weaviate import WeaviateClientFactory
 from genie_flow_invoker.invoker.weaviate.base import WeaviateClientProcessor
@@ -37,6 +37,12 @@ def compile_chunked_documents(
     :param named_vector: a string representing the named vector or None for the default vector
     :return: a list of ChunkedDocument, com
     """
+    if not isinstance(query_results, list):
+        logger.error("Query results are not a list, cannot compile chunked documents.")
+        raise ValueError(
+            "Query results are not a list, cannot compile chunked documents."
+        )
+
     document_index: dict[str, ChunkedDocument] = dict()
     logger.debug(
         "creating a list of chunked document for {nr_chunks} chunks",
@@ -60,6 +66,7 @@ def compile_chunked_documents(
         )
         logger.debug(
             "created a chunk with id {chunk_id}",
+            chunk_id=chunk.chunk_id,
             **chunk.model_dump(),
         )
         filename = properties["filename"]
@@ -67,7 +74,7 @@ def compile_chunked_documents(
             document_index[filename].chunks.append(chunk)
         except KeyError:
             logger.debug(
-                f"creating a new ChunkedDocument for filename {filename}",
+                "creating a new ChunkedDocument for filename {filename}",
                 filename=filename,
             )
             document_index[filename] = ChunkedDocument(
@@ -76,8 +83,10 @@ def compile_chunked_documents(
                 chunks=[chunk],
             )
     logger.debug(
-        "created {nr_documents} chunked documents from these chunks",
+        "created {nr_documents} chunked documents containing "
+        "a total of {nr_chunks} chunks",
         nr_documents=len(document_index.keys()),
+        nr_chunks=len(query_results),
     )
     return [document for document in document_index.values()]
 
@@ -92,6 +101,14 @@ def _calculate_operation_level(
     response = collection.aggregate.over_all(
         return_metrics=Metrics("hierarchy_level").integer(maximum=True),
     )
+    if response is None or not isinstance(response, AggregateReturn):
+        logger.error(
+            "Failed to retrieve maximum hierarchy level for collection '{collection_name}'",
+            collection_name=collection.name,
+        )
+        raise ValueError(
+            f"Failed to retrieve maximum hierarchy level for collection '{collection.name}'"
+        )
     logger.debug(
         "found highest hierarchy level {max_hierarchy_level}",
         max_hierarchy_level=response.properties["hierarchy_level"].maximum,
@@ -128,8 +145,8 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
             distance=cast_or_none(query_params, "horizon", float),
         )
         logger.debug(
-            "setting base query parameters to {json_base_params}",
-            json_base_params=json.dumps(self.base_query_params),
+            "setting base query parameters to {base_params}",
+            base_params=str(self.base_query_params),
             **self.base_query_params,
         )
 
@@ -160,7 +177,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         """
         logger.debug(
             "creating query parameters using kwargs {json_kwargs}",
-            json_kwargs=json.dumps(kwargs),
+            kwargs=str(kwargs),
         )
         query_params = self.base_query_params.copy()
         for kwarg_k, kwarg_v in kwargs.items():
@@ -233,6 +250,9 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         :param kwargs: additional keyword arguments that were passed to the search function
         :return: a list of objects with the parent strategy applied
         """
+        if not isinstance(query_results, list):
+            logger.error("Query results are not a list, cannot apply parent strategy.")
+            raise ValueError("Query results are not a list, cannot apply parent strategy.")
         parent_strategy = kwargs.get(
             "parent_strategy", None
         ) or self.base_query_params.get("parent_strategy", None)
@@ -316,7 +336,7 @@ class AbstractSearcher(WeaviateClientProcessor, ABC):
         logger.debug(
             "using search function '{function_name}' with parameters {function_params}",
             function_name=search_function.__name__,
-            function_params=function_params,
+            function_params=str(function_params),
             **function_params,
         )
         query_results = search_function(**bound_function.arguments).objects
