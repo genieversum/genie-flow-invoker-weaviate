@@ -5,7 +5,7 @@ from weaviate.collections.classes.filters import (
     _FilterAnd,
     _Operator,
     _FilterOr,
-    _FilterValue,
+    _FilterValue, _Filters,
 )
 
 
@@ -24,7 +24,7 @@ def test_filter_all():
             "less_equal_attr <=": "zeus",
             "greater_attr >": "apollo",
             "greater_equal_attr >=": "apollo",
-            "in_attr @": "Dionysus",
+            "in_attr contains": "Dionysus",
         }
     }
     weaviate_filter = compile_filter(filter_definition)
@@ -58,7 +58,7 @@ def test_filter_any():
             "less_equal_attr <=": "zeus",
             "greater_attr >": "apollo",
             "greater_equal_attr >=": "apollo",
-            "in_attr @": "Dionysus",
+            "in_attr contains": "Dionysus",
         }
     }
     weaviate_filter = compile_filter(filter_definition)
@@ -125,3 +125,52 @@ def test_filter_space_separator():
     assert weaviate_filter.target == create_flat_name("a space separated   attribute")
     assert weaviate_filter.operator == _Operator.NOT_EQUAL
     assert weaviate_filter.value == 0
+
+
+def test_filter_list():
+    filter_definition = {
+        "having_all": {
+            "first_all_attr contains": [12, 13],
+        }
+    }
+    weaviate_filter = compile_filter(filter_definition)
+
+    assert weaviate_filter is not None
+    assert isinstance(weaviate_filter, _FilterValue)
+    assert weaviate_filter.target == create_flat_name("first_all_attr")
+    assert weaviate_filter.operator == _Operator.CONTAINS_ANY
+    assert weaviate_filter.value == [12, 13]
+
+
+def test_filter_in():
+    filter_definition = {
+        "having_all": {
+            "property in": [16, 32]
+        }
+    }
+    weaviate_filter = compile_filter(filter_definition)
+
+    assert weaviate_filter is not None
+    assert isinstance(weaviate_filter, _FilterOr)
+    assert len(weaviate_filter.filters) == 2
+    for f in weaviate_filter.filters:
+        assert isinstance(f, _FilterValue)
+        assert f.operator == _Operator.EQUAL
+        assert f.value in {16, 32}
+
+
+def test_filter_not_in():
+    filter_definition = {
+        "having_all": {
+            "property not-in": [16, 32]
+        }
+    }
+    weaviate_filter = compile_filter(filter_definition)
+
+    assert weaviate_filter is not None
+    assert isinstance(weaviate_filter, _FilterAnd)
+    assert len(weaviate_filter.filters) == 2
+    for f in weaviate_filter.filters:
+        assert isinstance(f, _FilterValue)
+        assert f.operator == _Operator.NOT_EQUAL
+        assert f.value in {16, 32}
