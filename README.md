@@ -115,7 +115,9 @@ space-separated from the property name.
 * `>=` as greater than or equal
 * `<` as less than
 * `<=` as less than or equal
-* `@` indicating a match when the given value is contained in the list
+* `contains` indicating a match when the given value is contained in the list
+* `in` the value of the property is in a list that is given
+* `not-in' the value of the propery is not in a list that is given
 
 So, for example:
 
@@ -124,12 +126,12 @@ So, for example:
   "having_all": {
     "some_property": "aap",
     "another_property >": 10,
-    "a_list_property @": "noot"
+    "a_list_property contains": "noot"
   }
 }
 ```
 will only return chunks that have `some_property == "aap"` AND `another_property > 10` AND 
-`"noot" in a_list_property`. 
+`"noot"` in `a_list_property`. 
 
 ### Doing similarity search:
 #### `WeaviateSimilaritySearchInvoker`
