@@ -82,7 +82,6 @@ def _compile_named_vectors(params: dict):
         [
             getattr(Configure.NamedVectors, value["vectorizer"])(
                 name=key,
-                #source_properties=value["source_properties"],
                 vector_index_config=Configure.VectorIndex.flat(),
             )
             for key, value in config.items()
@@ -162,7 +161,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
                     vectorizer_config=[
                         Configure.NamedVectors.none(
                             name="default",
-                            vector_index_config=Configure.VectorIndex.hnsw()
+                            vector_index_config=Configure.VectorIndex.flat()
                         )],
                 )
             except UnexpectedStatusCodeError as e:
