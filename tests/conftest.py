@@ -2,6 +2,7 @@ import uuid as uuidlib
 from collections import namedtuple
 from typing import Optional, Any
 
+from weaviate.collections.classes.aggregate import AggregateInteger, AggregateReturn
 from weaviate.collections.classes.internal import Object
 from weaviate.collections.classes.batch import DeleteManyReturn
 from weaviate.collections.classes.filters import _FilterAnd, _Operator, _FilterOr, Filter, \
@@ -189,7 +190,7 @@ class MockCollection:
         return MockCollection(f"{self.name} / {tenant_name}", self.query_results)
 
 
-class MockAggregate:
+class MockAggregate(AggregateReturn):
 
     def __init__(self, query_results: list[Object]):
         self.query_results = query_results

@@ -1,7 +1,7 @@
 import json
 from abc import ABC, abstractmethod
 from hashlib import md5
-from typing import Any
+from typing import Any, Iterable, Sized
 
 from genie_flow_invoker.genie import GenieInvoker
 from loguru import logger
@@ -90,7 +90,7 @@ class ConfiguredWeaviateSimilaritySearchInvoker(AbstractWeaviateInvoker, ABC):
         :param content: the content to be processed
         :return: a list of `ChunkDistance` objects
         """
-        logger.debug(f"invoking weaviate with '{content}'")
+        logger.debug("invoking weaviate with '{content}'", content=content)
         logger.info(
             "invoking similarity search for content hash {content_hash}",
             content_hash=md5(content.encode("utf-8")).hexdigest(),
@@ -137,6 +137,9 @@ class WeaviateVectorSimilaritySearchInvoker(ConfiguredWeaviateSimilaritySearchIn
             query_vector = json.loads(content)
         except json.decoder.JSONDecodeError:
             logger.error("invalid content '{content}'", content=content)
+            raise ValueError("expected a JSON encoded list of floats")
+        if not isinstance(query_vector, list):
+            logger.error("invalid type of query vector '{content}'", content=content)
             raise ValueError("expected a JSON encoded list of floats")
         logger.debug(
             "invoking similarity search for vector of {nr_dims} dimensions, "
