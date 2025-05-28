@@ -34,11 +34,7 @@ def _create_attribute_filter(key: str, value: Any) -> _Filters | None:
             return filter_by_property.greater_than(value)
         case ">=":
             return filter_by_property.greater_or_equal(value)
-        case "@" | "contains":
-            if indicator.strip() == "@":
-                logger.warning(
-                    "The use of the `@` operator is deprecated; use `contains` instead"
-                )
+        case "contains":
             return filter_by_property.contains_any(value)
         case "in":
             return Filter.any_of(
