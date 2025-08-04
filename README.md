@@ -1,5 +1,8 @@
 # Weaviate Invokers
-This package contains the invokers that interact with a Weaviate database.
+[![PyPI version](https://badge.fury.io/py/genie-flow-invoker-weaviate.svg?icon=si%3Apython)](https://badge.fury.io/py/genie-flow-invoker-weaviate)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/genie-flow-invoker-weaviate)
+
+This package contains the Genie Flow invokers that interact with a Weaviate database.
 
 ## Invoker configuration `meta.yaml`
 The configuration in `meta.yaml` consists of two sections: `connection` and `parameters`.
