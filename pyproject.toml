@@ -35,7 +35,7 @@ classifiers=[
 ]
 dependencies=[
     "loguru~=0.7",
-    "genie-flow-invoker~=0.6.4",
+    "genie-flow-invoker",
     "weaviate-client~=4.14",
     "pydantic~=2.11",
 ]
