@@ -93,7 +93,7 @@ class WeaviateClientFactory:
             
             if self.api_key:
                 # If weaviate_api_key is not None or an empty string, add authentication
-                connection_params["auth_credentials"] = Auth.api_key(weaviate_api_key)
+                connection_params["auth_credentials"] = Auth.api_key(self.api_key)
                 logger.info("Connecting with API Key authentication.")
                 
             self.client = weaviate.connect_to_custom(**connection_params)
