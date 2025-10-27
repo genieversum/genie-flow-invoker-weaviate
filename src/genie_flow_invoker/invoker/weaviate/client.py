@@ -96,7 +96,7 @@ class WeaviateClientFactory:
                 connection_params["auth_credentials"] = Auth.api_key(self.api_key)
                 logger.info("Connecting with API Key authentication.")
                 
-            self.client = weaviate.connect_to_custom(**connection_params)
+            self._client = weaviate.connect_to_custom(**connection_params)
         return self._client
 
     def __exit__(self, exc_type, exc_val, exc_tb):
