@@ -5,6 +5,7 @@ from loguru import logger
 
 import weaviate
 from weaviate import WeaviateClient
+from weaviate.classes.init import Auth
 
 
 class WeaviateClientFactory:
@@ -26,10 +27,13 @@ class WeaviateClientFactory:
     def __init__(self, config: dict[str, Any]):
         """
         Creates a new Weaviate client factory. Configuration should include: `http_host`,
-        `http_port`, `http_secure`, `grpc_host`, `grpc_port`, and `grpc_secure`. The values from
-        config will be overriden by environment variables, respectively: `WEAVIATE_HTTP_HOST`,
-        `WEAVIATE_HTTP_PORT`, `WEAVIATE_HTTP_SECURE`, `WEAVIATE_GRPC_HOST`, `WEAVIATE_GRPC_PORT` and
-        `WEAVIATE_GRPC_SECURE`.
+        `http_port`, `http_secure`, `grpc_host`, `grpc_port`, `grpc_secure` and `api_key`
+        which is optional.
+        
+        The values from config will be overriden by environment variables, respectively:
+        `WEAVIATE_HTTP_HOST`, `WEAVIATE_HTTP_PORT`, `WEAVIATE_HTTP_SECURE`,
+        `WEAVIATE_GRPC_HOST`, `WEAVIATE_GRPC_PORT`, `WEAVIATE_GRPC_SECURE` and
+        `WEAVIATE_API_KEY`.
         """
         self._client: Optional[WeaviateClient] = None
 
@@ -74,7 +78,7 @@ class WeaviateClientFactory:
             "WEAVIATE_API_KEY",
             "api_key",
             "Weaviate API Key",
-            "",
+            None,
         )
 
     def __enter__(self):
@@ -94,8 +98,11 @@ class WeaviateClientFactory:
 
             if self.api_key:
                 # If weaviate_api_key is not None or an empty string, add authentication
-                connection_params["auth_credentials"] = Auth.api_key(weaviate_api_key)
-                logger.info("Connecting with API Key authentication.")
+                connection_params["auth_credentials"] = Auth.api_key(self.api_key)
+                logger.info(
+                    "Connecting with API Key authentication with key of length {key_length}",
+                    key_length=len(self.api_key),
+                )
 
             self._client = weaviate.connect_to_custom(**connection_params)
         return self._client

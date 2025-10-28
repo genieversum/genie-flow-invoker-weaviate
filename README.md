@@ -31,6 +31,10 @@ The following settings are required to connect to the weaviate database
 `grpc_secure`
 : boolean indicating if a secure connection is to be made over gRPC
 
+`api_key`
+: string value of an API key that is used to authenticate
+
+
 ## Similarity Search
 A similarity search conducts a nearest-neighbour search within the vector space of a given
 collection. Every chunk (Document) that is ingested into the Weaviate database has at least
