@@ -7,16 +7,31 @@ genie_flow_invoker = "src/genie_flow_invoker"
 
 [project]
 name = "genie_flow_invoker_weaviate"
-authors = [
+maintainers = [
     { name = "Willem van Asperen", email = "willem.van.asperen@paconsulting.com"}
 ]
 description = "Genie Flow Invoker Weaviate"
 readme = "README.md"
-requires-python = "~=3.11.0"
+requires-python = ">=3.11.0"
+license = "Apache-2.0"
+license-files = [
+    "LICENSES",
+    "NOTICES",
+]
 classifiers=[
-    'Programming Language :: Python :: 3',
-    'License :: OSI Approved :: MIT License',
-    'Operating System :: OS Independent',
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Framework :: Celery",
+    "Framework :: FastAPI",
+    "Framework :: Pydantic",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies=[
     "loguru~=0.7",
