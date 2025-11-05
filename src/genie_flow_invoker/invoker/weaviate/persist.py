@@ -291,18 +291,15 @@ class WeaviatePersistor(WeaviateClientProcessor):
                 vector = {vector_name: chunk.embedding} if chunk.embedding else None
 
                 if not collection.data.exists(chunk.chunk_id):
-                    if len(chunk_buffer) < batch_size:
-                        logger.debug("adding chunk with id {chunk_id} to buffer", chunk_id=chunk.chunk_id)
-                        chunk_buffer.append(
-                            DataObject(
-                                uuid=chunk.chunk_id,
-                                properties=properties,
-                                references=references,
-                                vector=vector,
-                            )
+                    logger.debug("adding chunk with id {chunk_id} to buffer", chunk_id=chunk.chunk_id)
+                    chunk_buffer.append(
+                        DataObject(
+                            uuid=chunk.chunk_id,
+                            properties=properties,
+                            references=references,
+                            vector=vector,
                         )
-                    else:
-                        nr_inserted += drain_buffer(collection, chunk_buffer)
+                    )
                 else:
                     logger.debug("replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
                     # TODO: use batch replace when available - weaviate currently does not support batch replace
@@ -314,6 +311,9 @@ class WeaviatePersistor(WeaviateClientProcessor):
                     )
                     nr_replaced += 1
 
+                while len(chunk_buffer) >= batch_size:
+                    nr_inserted += drain_buffer(collection, chunk_buffer)
+                    
             # drain remaining buffer
             nr_inserted += drain_buffer(collection, chunk_buffer)
         return collection_name, tenant_name, nr_inserted, nr_replaced
