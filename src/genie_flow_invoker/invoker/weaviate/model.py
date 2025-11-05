@@ -49,7 +49,7 @@ class WeaviatePersistenceRequest(BaseModel):
         default=None,
         description="The tenant name to store the chunked document in",
     )
-    document: ChunkedDocument = Field(
+    document: ChunkedDocument | list[ChunkedDocument] = Field(
         description="The document to persist",
     )
 
