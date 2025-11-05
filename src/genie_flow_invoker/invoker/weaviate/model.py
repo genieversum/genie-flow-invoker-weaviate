@@ -49,8 +49,12 @@ class WeaviatePersistenceRequest(BaseModel):
         default=None,
         description="The tenant name to store the chunked document in",
     )
-    document: ChunkedDocument = Field(
+    document: ChunkedDocument | list[ChunkedDocument] = Field(
         description="The document to persist",
+    )
+    batch_size: int = Field(
+        default=1000,
+        description="The batch size for inserting chunks",
     )
 
 
