@@ -125,6 +125,20 @@ class MockCollectionData:
             )
         )
 
+    def insert_many(self, data_objects: list):
+        for data_object in data_objects:
+            # Extract the vector from the dict format used by DataObject
+            vector = None
+            if data_object.vector:
+                # data_object.vector is a dict like {"default": [1.0, 2.0, ...]}
+                vector = data_object.vector.get("default", list(data_object.vector.values())[0])
+            self.insert(
+                uuid=data_object.uuid,
+                properties=data_object.properties,
+                references=data_object.references,
+                vector=vector,
+            )
+
     def replace(
         self,
         uuid: str | uuidlib.UUID,
