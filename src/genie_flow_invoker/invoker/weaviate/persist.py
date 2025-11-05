@@ -13,6 +13,7 @@ from weaviate.classes.config import (
     Property,
     ReferenceProperty,
 )
+from weaviate.collections.classes.data import DataObject
 from weaviate.collections import Collection
 
 from .properties import flatten_properties
@@ -194,14 +195,15 @@ class WeaviatePersistor(WeaviateClientProcessor):
 
     def persist_document(
         self,
-        document: ChunkedDocument,
+        document: ChunkedDocument | list[ChunkedDocument],
         collection_name: Optional[str] = None,
         tenant_name: Optional[str] = None,
         vector_name: str = "default",
+        batch_size: int = 1000,
     ) -> tuple[str, Optional[str], int, int]:
         """
-        Persist a given chunked document into a collection with the given name and potentially
-        into a tenant with the given name.
+        Persist a given chunked document or a list of chunked documents into a collection with the 
+        given name and potentially into a tenant with the given name.
 
         The hierarchy of the chunks in this document is retained and the document filename and
         other metadata is persisted with each and every Object.
@@ -210,6 +212,7 @@ class WeaviatePersistor(WeaviateClientProcessor):
         :param collection_name: the name of the collection to store it into
         :param tenant_name: an Optional name of a tenant to store the document into.
         :param vector_name: the name of the vector to store the document embeddings into.
+        :param batch_size: the number of chunks to insert in a single batch
         :return: tuple of the used collection_name and tenant_name, nr_inserted and nr_replaces,
                 respectively the number of inserted and replaced chunks
         """
@@ -217,9 +220,17 @@ class WeaviatePersistor(WeaviateClientProcessor):
             collection_name, tenant_name
         )
 
-        chunk_index: dict[int, list[DocumentChunk]] = defaultdict(list)
-        for chunk in document.chunks:
-            chunk_index[chunk.hierarchy_level].append(chunk)
+        documents = [document] if not isinstance(document, list) else document
+        del document  # unbind this variable to avoid confusion with loop variable
+
+        chunk_index: dict[int, list[tuple[DocumentChunk, ChunkedDocument]]] = defaultdict(list)
+        nr_chunks = 0
+        nr_files = 0
+        for document in documents:
+            nr_files += 1
+            for chunk in document.chunks:
+                nr_chunks += 1
+                chunk_index[chunk.hierarchy_level].append((chunk, document))
 
         with self.client_factory as client:
             logger.debug(
@@ -256,10 +267,10 @@ class WeaviatePersistor(WeaviateClientProcessor):
 
         logger.info(
             "Connected to collection '{collection_name}', persisting {nr_chunks} chunks, "
-            "for file '{filename}'",
+            "for '{nr_files}' files",
             collection_name=collection.name,
-            nr_chunks=len(document.chunks),
-            filename=document.filename,
+            nr_chunks=nr_chunks,
+            nr_files=nr_files,
         )
 
         # making sure we add the chunks from top to bottom
@@ -273,30 +284,46 @@ class WeaviatePersistor(WeaviateClientProcessor):
                 nr_chunks=len(chunks),
                 hierarchy_level=hierarchy_level,
             )
-            for chunk in chunks:
+            chunk_buffer = []
+            for chunk, document in chunks:
                 properties = _build_properties(document, chunk)
                 references = {"parent": chunk.parent_id} if chunk.parent_id else None
                 vector = {vector_name: chunk.embedding} if chunk.embedding else None
 
                 if not collection.data.exists(chunk.chunk_id):
-                    logger.debug(
-                        "inserting chunk with id {chunk_id}", chunk_id=chunk.chunk_id
+                    logger.debug("adding chunk with id {chunk_id} to buffer", chunk_id=chunk.chunk_id)
+                    chunk_buffer.append(
+                        DataObject(
+                            uuid=chunk.chunk_id,
+                            properties=properties,
+                            references=references,
+                            vector=vector,
+                        )
                     )
-                    collection.data.insert(
-                        uuid=chunk.chunk_id,
-                        properties=properties,
-                        references=references,
-                        vector=vector,
-                    )
-                    nr_inserted += 1
                 else:
                     logger.debug("replacing chunk with id {chunk_id}", chunk_id=chunk.chunk_id)
+                    # TODO: use batch replace when available - weaviate currently does not support batch replace
                     collection.data.replace(
-                        uuid=chunk.chunk_id,
+                        uuid=chunk.chunk_id,  # type: ignore
                         properties=properties,
-                        references=references,
+                        references=references, # potential issue: parent not existing in weaviate
                         vector=vector,
                     )
                     nr_replaced += 1
 
+                while len(chunk_buffer) >= batch_size:
+                    nr_inserted += drain_buffer(collection, chunk_buffer)
+                    
+            # drain remaining buffer
+            nr_inserted += drain_buffer(collection, chunk_buffer)
         return collection_name, tenant_name, nr_inserted, nr_replaced
+
+
+def drain_buffer(collection: Collection, chunk_buffer: list[DataObject]) -> int:
+    if chunk_buffer:
+        logger.debug("inserting batch of {batch_size} chunks", batch_size=len(chunk_buffer))
+        collection.data.insert_many(chunk_buffer)
+        nr_inserted = len(chunk_buffer)
+        chunk_buffer.clear()
+        return nr_inserted
+    return 0
