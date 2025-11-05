@@ -257,9 +257,10 @@ class WeaviatePersistInvoker(AbstractWeaviatePersistorInvoker):
 
         collection_name, tenant_name, nr_inserted, nr_replaced = (
             self.persistor.persist_document(
-                request.document,
-                request.collection_name,
-                request.tenant_name,
+                document=request.document,
+                collection_name=request.collection_name,
+                tenant_name=request.tenant_name,
+                batch_size=request.batch_size,
             )
         )
 

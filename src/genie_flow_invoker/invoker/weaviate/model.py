@@ -52,6 +52,10 @@ class WeaviatePersistenceRequest(BaseModel):
     document: ChunkedDocument | list[ChunkedDocument] = Field(
         description="The document to persist",
     )
+    batch_size: int = Field(
+        default=1000,
+        description="The batch size for inserting chunks",
+    )
 
 
 class WeaviatePersistenceResponse(BaseModel):
